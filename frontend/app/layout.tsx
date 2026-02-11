@@ -29,9 +29,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <header className='line-section fade-up mb-5 flex flex-wrap items-end justify-between gap-4'>
             <div className='space-y-1.5'>
               <p className='eyebrow'>Reddit Stance Analytics</p>
-              <Link href='/' className='display text-2xl font-bold text-slate-900 sm:text-[30px]'>
-                Market Mood Radar
-              </Link>
+              <div className='flex flex-wrap items-center gap-2'>
+                <Link href='/' className='display text-2xl font-bold text-slate-900 sm:text-[30px]'>
+                  Market Mood Radar
+                </Link>
+                <Link href='/research' className='score-pill score-pill-neutral'>
+                  Research Lab
+                </Link>
+              </div>
             </div>
             <div className='flex flex-wrap items-center gap-2 text-xs'>
               <span className='score-pill score-pill-neutral'>Berlin day buckets</span>

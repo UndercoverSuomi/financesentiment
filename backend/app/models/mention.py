@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Index, Integer, String
+from sqlalchemy import Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -20,4 +20,5 @@ class Mention(Base):
 
     __table_args__ = (
         Index('ix_mentions_target_type_target_id', 'target_type', 'target_id'),
+        UniqueConstraint('target_type', 'target_id', 'ticker', name='uq_mentions_target_ticker'),
     )

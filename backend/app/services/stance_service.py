@@ -42,14 +42,15 @@ class StanceService:
         selftext: str,
         parent_text: str,
     ) -> list[StanceResult]:
-        current_mentions = self._ticker_extractor.extract(text)
+        current_mentions = self._merge_mentions_by_ticker(self._ticker_extractor.extract(text))
         parent_tickers = self._ticker_extractor.extract_tickers_only(parent_text)
-        title_tickers = self._ticker_extractor.extract_tickers_only(title)
 
         mentions = list(current_mentions)
-        if not mentions:
-            inherited = sorted(parent_tickers.union(title_tickers))
-            for ticker in inherited:
+        if not mentions and target_type == TargetType.comment and self._settings.inherit_parent_tickers_for_comments:
+            inherited = set(parent_tickers)
+            if self._settings.inherit_title_tickers_for_comments:
+                inherited |= self._ticker_extractor.extract_tickers_only(title)
+            for ticker in sorted(inherited):
                 mentions.append(
                     ExtractedTicker(
                         ticker=ticker,
@@ -59,6 +60,7 @@ class StanceService:
                         span_end=-1,
                     )
                 )
+            mentions = self._merge_mentions_by_ticker(mentions)
 
         if not mentions:
             return []
@@ -77,7 +79,9 @@ class StanceService:
             ticker_in_text = mention.source != 'context'
             short_text = len(normalize_text(text)) < self._settings.unclear_short_text_len
 
-            if confidence < self._settings.unclear_threshold or (short_text and not ticker_in_text):
+            if mention.source == 'context' and not self._settings.allow_context_label_inference:
+                label = StanceLabel.unclear
+            elif confidence < self._settings.unclear_threshold or (short_text and not ticker_in_text):
                 label = StanceLabel.unclear
             elif max_label[0] == 'BULLISH':
                 label = StanceLabel.bullish
@@ -106,3 +110,30 @@ class StanceService:
             except Exception:
                 return DeterministicStanceModel()
         return DeterministicStanceModel()
+
+    def _merge_mentions_by_ticker(self, mentions: list[ExtractedTicker]) -> list[ExtractedTicker]:
+        selected: dict[str, ExtractedTicker] = {}
+        for mention in mentions:
+            previous = selected.get(mention.ticker)
+            if previous is None or self._is_better_mention(mention, previous):
+                selected[mention.ticker] = mention
+        return sorted(selected.values(), key=lambda m: m.ticker)
+
+    def _is_better_mention(self, candidate: ExtractedTicker, current: ExtractedTicker) -> bool:
+        source_rank = {
+            'cashtag': 4,
+            'token': 3,
+            'synonym': 2,
+            'context': 1,
+        }
+        candidate_key = (
+            candidate.confidence,
+            source_rank.get(candidate.source, 0),
+            candidate.span_end - candidate.span_start,
+        )
+        current_key = (
+            current.confidence,
+            source_rank.get(current.source, 0),
+            current.span_end - current.span_start,
+        )
+        return candidate_key > current_key

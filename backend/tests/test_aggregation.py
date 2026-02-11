@@ -46,12 +46,18 @@ def test_aggregation_weighted_and_unweighted() -> None:
 
     row = scores['AAPL']
     assert row.mention_count == 3
+    assert row.valid_count == 2
     assert row.bullish_count == 1
     assert row.bearish_count == 1
     assert row.unclear_count == 1
     assert row.unclear_rate == 1 / 3
 
     assert abs(row.score_unweighted - 0.2) < 1e-6
+    assert abs(row.score_sum_unweighted - 0.4) < 1e-6
 
     expected_weighted = (math.log(10) * 0.8 + math.log(4) * -0.4) / (math.log(10) + math.log(4))
     assert abs(row.score_weighted - expected_weighted) < 1e-6
+    assert abs(row.weighted_numerator - (math.log(10) * 0.8 + math.log(4) * -0.4)) < 1e-6
+    assert abs(row.weighted_denominator - (math.log(10) + math.log(4))) < 1e-6
+    assert row.score_stddev_unweighted > 0
+    assert row.ci95_low_unweighted <= row.score_unweighted <= row.ci95_high_unweighted

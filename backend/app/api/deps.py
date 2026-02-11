@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.services.evaluation_service import EvaluationService
 from app.services.ingestion_service import IngestionService
 
 
@@ -21,3 +22,8 @@ def get_db() -> Generator[Session, None, None]:
 @lru_cache(maxsize=1)
 def get_ingestion_service() -> IngestionService:
     return IngestionService(settings=get_settings())
+
+
+@lru_cache(maxsize=1)
+def get_evaluation_service() -> EvaluationService:
+    return EvaluationService(settings=get_settings())

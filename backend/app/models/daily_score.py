@@ -15,6 +15,13 @@ class DailyScore(Base):
 
     score_unweighted: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     score_weighted: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    score_stddev_unweighted: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ci95_low_unweighted: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ci95_high_unweighted: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    valid_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    score_sum_unweighted: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    weighted_numerator: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    weighted_denominator: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     mention_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     bullish_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

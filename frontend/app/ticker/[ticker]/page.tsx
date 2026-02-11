@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import ErrorState from '@/components/ErrorState';
+import HintLabel from '@/components/HintLabel';
 import ScoreChart from '@/components/ScoreChart';
 import VolumeChart from '@/components/VolumeChart';
 import { apiGet, readableApiError } from '@/lib/api';
@@ -87,17 +88,23 @@ export default async function TickerPage({
 
         <div className='mt-5 grid gap-3 sm:grid-cols-3'>
           <article className='metric-card'>
-            <p className='eyebrow'>Latest Score</p>
+            <p className='eyebrow'>
+              <HintLabel label='Latest Score' hint='Aktueller gewichteter Stance-Score im gewaehlten Zeitfenster.' />
+            </p>
             <p className='display mt-1 text-3xl font-bold text-slate-900'>
               {latestPoint ? formatScore(latestPoint.score_weighted) : '0.000'}
             </p>
           </article>
           <article className='metric-card'>
-            <p className='eyebrow'>Avg Unclear</p>
+            <p className='eyebrow'>
+              <HintLabel label='Avg Unclear' hint='Mittlere UNCLEAR-Rate ueber alle gezeigten Buckets.' />
+            </p>
             <p className='display mt-1 text-3xl font-bold text-slate-900'>{formatPct(avgUnclearRate)}</p>
           </article>
           <article className='metric-card'>
-            <p className='eyebrow'>Peak Mentions</p>
+            <p className='eyebrow'>
+              <HintLabel label='Peak Mentions' hint='Hoechste Mention-Anzahl in einem einzelnen Zeitbucket.' />
+            </p>
             <p className='display mt-1 text-3xl font-bold text-slate-900'>{maxMentions}</p>
           </article>
         </div>
@@ -110,7 +117,9 @@ export default async function TickerPage({
 
       <section className='grid gap-4 xl:grid-cols-2'>
         <div className='panel p-4 sm:p-5'>
-          <h2 className='display mb-3 text-xl font-semibold text-slate-900'>Bullish Examples</h2>
+          <h2 className='display mb-3 text-xl font-semibold text-slate-900'>
+            <HintLabel label='Bullish Examples' hint='Beispielkommentare, die fuer diesen Ticker bullish klassifiziert wurden.' />
+          </h2>
           <div className='space-y-3'>
             {data.bullish_examples.map((ex, idx) => (
               <article key={`${ex.id}-${idx}`} className='metric-card space-y-2'>
@@ -129,7 +138,9 @@ export default async function TickerPage({
         </div>
 
         <div className='panel p-4 sm:p-5'>
-          <h2 className='display mb-3 text-xl font-semibold text-slate-900'>Bearish Examples</h2>
+          <h2 className='display mb-3 text-xl font-semibold text-slate-900'>
+            <HintLabel label='Bearish Examples' hint='Beispielkommentare, die fuer diesen Ticker bearish klassifiziert wurden.' />
+          </h2>
           <div className='space-y-3'>
             {data.bearish_examples.map((ex, idx) => (
               <article key={`${ex.id}-${idx}`} className='metric-card space-y-2'>

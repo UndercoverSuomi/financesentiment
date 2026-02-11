@@ -1,0 +1,13 @@
+target_type,ticker,gold_label,text,title,selftext,parent_text
+comment,AAPL,BULLISH,"I am buying more AAPL calls into earnings.",AAPL daily thread,,
+comment,AAPL,BEARISH,"AAPL looks overvalued and I am short now.",AAPL daily thread,,
+comment,TSLA,NEUTRAL,"TSLA seems fairly priced for now, just holding.",TSLA thread,,
+comment,TSLA,UNCLEAR,"lol not sure",TSLA thread,,
+comment,NVDA,BULLISH,"NVDA guidance was strong, still long.",Semis talk,,
+comment,NVDA,BEARISH,"NVDA downside risk is high, this can dump.",Semis talk,,
+submission,MSFT,BULLISH,"MSFT beat earnings and raised guidance.",MSFT earnings,,""
+submission,AMZN,BEARISH,"AMZN missed estimates and margins look weak.",AMZN earnings,,""
+comment,GOOG,NEUTRAL,"GOOG could go either way this quarter.",GOOG thread,,
+comment,PLTR,BULLISH,"PLTR to the moon, strong momentum.",PLTR thread,,
+comment,COIN,BEARISH,"COIN might crash if BTC falls.",Crypto equities,,
+comment,QQQ,NEUTRAL,"QQQ is sideways this week.",Macro thread,,

@@ -21,14 +21,19 @@ class Settings(BaseSettings):
     reddit_user_agent: str = 'financesentiment/0.1 (contact: email_or_repo)'
     reddit_timeout_connect: float = 3.0
     reddit_timeout_read: float = 20.0
-    reddit_max_concurrency: int = 3
+    reddit_max_concurrency: int = 1
     reddit_max_retries: int = 4
-    reddit_backoff_base: float = 0.75
+    reddit_backoff_base: float = 1.25
+    reddit_thread_limit: int = 500
+    reddit_thread_depth: int = 32
+    reddit_morechildren_chunk_size: int = 100
+    reddit_morechildren_max_batches: int = 30
 
     subreddits_csv: str = 'wallstreetbets,stocks,investing,finance'
     pull_sort: str = 'top'
-    pull_t_param: str = 'day'
-    pull_limit: int = 10
+    pull_t_param: str = 'week'
+    pull_limit: int = 100
+    pull_max_pages: int = 8
 
     enable_external_extraction: bool = False
     extraction_text_cap: int = 50000
@@ -39,6 +44,9 @@ class Settings(BaseSettings):
     use_finbert: bool = False
     unclear_threshold: float = 0.55
     unclear_short_text_len: int = 20
+    inherit_parent_tickers_for_comments: bool = True
+    inherit_title_tickers_for_comments: bool = False
+    allow_context_label_inference: bool = False
 
     use_depth_decay: bool = True
     lambda_depth: float = 0.15
@@ -50,6 +58,8 @@ class Settings(BaseSettings):
     ticker_master_path: str = 'tickers_sample.csv'
     synonyms_path: str = 'synonyms.json'
     stoplist_path: str = 'stoplist.json'
+    evaluation_dataset_path: str = 'gold_labels_sample.csv'
+    evaluation_default_max_rows: int = 5000
 
     @property
     def repo_root(self) -> Path:
@@ -91,6 +101,10 @@ class Settings(BaseSettings):
     @property
     def stoplist_file(self) -> Path:
         return self.repo_root / self.stoplist_path
+
+    @property
+    def evaluation_dataset_file(self) -> Path:
+        return self.repo_root / self.evaluation_dataset_path
 
 
 @lru_cache(maxsize=1)

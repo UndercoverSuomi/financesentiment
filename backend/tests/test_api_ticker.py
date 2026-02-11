@@ -27,6 +27,10 @@ def test_ticker_series_collapses_subreddits_when_filter_missing() -> None:
                     ticker='AAPL',
                     score_unweighted=0.5,
                     score_weighted=0.6,
+                    valid_count=9,
+                    score_sum_unweighted=4.5,
+                    weighted_numerator=5.4,
+                    weighted_denominator=9.0,
                     mention_count=10,
                     bullish_count=6,
                     bearish_count=2,
@@ -40,6 +44,10 @@ def test_ticker_series_collapses_subreddits_when_filter_missing() -> None:
                     ticker='AAPL',
                     score_unweighted=-0.2,
                     score_weighted=-0.1,
+                    valid_count=4,
+                    score_sum_unweighted=-0.8,
+                    weighted_numerator=-0.4,
+                    weighted_denominator=4.0,
                     mention_count=5,
                     bullish_count=1,
                     bearish_count=3,
@@ -57,6 +65,8 @@ def test_ticker_series_collapses_subreddits_when_filter_missing() -> None:
     payload = response.json()
     assert len(payload['series']) == 1
     assert payload['series'][0]['mention_count'] == 15
+    assert abs(payload['series'][0]['score_unweighted'] - ((4.5 - 0.8) / (9 + 4))) < 1e-9
+    assert abs(payload['series'][0]['score_weighted'] - ((5.4 - 0.4) / (9 + 4))) < 1e-9
 
 
 def test_ticker_series_rejects_unknown_subreddit() -> None:

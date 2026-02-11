@@ -15,6 +15,7 @@ export default function ContextToggle({ context }: Props) {
         type='button'
         onClick={() => setOpen((v) => !v)}
         className='score-pill score-pill-neutral border border-slate-200 transition hover:bg-slate-100'
+        title='Zeigt den Modellkontext (Title/Self/Parent/Text), der fuer die Stance-Klassifikation verwendet wurde.'
       >
         {open ? 'Hide context' : 'Show context'}
       </button>

@@ -4,6 +4,10 @@ export type DailyScore = {
   ticker: string;
   score_unweighted: number;
   score_weighted: number;
+  score_stddev_unweighted: number;
+  ci95_low_unweighted: number;
+  ci95_high_unweighted: number;
+  valid_count: number;
   mention_count: number;
   bullish_count: number;
   bearish_count: number;
@@ -14,8 +18,202 @@ export type DailyScore = {
 
 export type ResultsResponse = {
   date_bucket_berlin: string;
+  date_from: string;
+  date_to: string;
+  window: '24h' | '7d';
   subreddit: string;
   rows: DailyScore[];
+};
+
+export type ModelVersionCount = {
+  model_version: string;
+  count: number;
+};
+
+export type MentionSourceCount = {
+  source: string;
+  count: number;
+};
+
+export type EvaluationLabelMetrics = {
+  label: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'UNCLEAR';
+  support: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  tp: number;
+  fp: number;
+  fn: number;
+};
+
+export type EvaluationConfusionCell = {
+  actual: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'UNCLEAR';
+  predicted: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'UNCLEAR';
+  count: number;
+};
+
+export type EvaluationErrorExample = {
+  row_id: number;
+  ticker: string;
+  actual: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'UNCLEAR';
+  predicted: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'UNCLEAR';
+  confidence: number;
+  source: string;
+  text: string;
+};
+
+export type EvaluationResponse = {
+  dataset_path: string;
+  rows_evaluated: number;
+  accuracy: number;
+  macro_f1: number;
+  weighted_f1: number;
+  expected_calibration_error: number;
+  direct_detection_rate: number;
+  context_inference_rate: number;
+  missing_prediction_rate: number;
+  model_versions: ModelVersionCount[];
+  per_label: EvaluationLabelMetrics[];
+  confusion: EvaluationConfusionCell[];
+  error_examples: EvaluationErrorExample[];
+};
+
+export type QualityResponse = {
+  date_bucket_berlin: string;
+  subreddit: string;
+  pulls_total: number;
+  pulls_success: number;
+  pulls_failed: number;
+  submissions: number;
+  reddit_reported_comments: number;
+  parsed_comments: number;
+  parsed_comment_coverage: number | null;
+  mentions_total: number;
+  context_mentions: number;
+  context_mention_rate: number;
+  unclear_count: number;
+  unclear_rate: number;
+  model_versions: ModelVersionCount[];
+  mention_sources: MentionSourceCount[];
+};
+
+export type AnalyticsDayPoint = {
+  date_bucket_berlin: string;
+  weighted_score: number;
+  unweighted_score: number;
+  mention_count: number;
+  valid_count: number;
+  unclear_rate: number;
+  bullish_share: number;
+  bearish_share: number;
+  neutral_share: number;
+  concentration_hhi: number;
+  top_ticker_share: number;
+};
+
+export type AnalyticsMarketSummary = {
+  avg_weighted_score: number;
+  score_volatility: number;
+  avg_unclear_rate: number;
+  avg_valid_ratio: number;
+  avg_bullish_share: number;
+  avg_bearish_share: number;
+  avg_neutral_share: number;
+  avg_concentration_hhi: number;
+  avg_top_ticker_share: number;
+  effective_ticker_count: number;
+  active_days: number;
+  total_mentions: number;
+  score_trend_slope: number;
+  mention_trend_slope: number;
+};
+
+export type AnalyticsRollingPoint = {
+  date_bucket_berlin: string;
+  weighted_score: number;
+  weighted_ma7: number;
+  weighted_ma14: number;
+  mention_count: number;
+  mentions_ma7: number;
+  unclear_rate: number;
+  unclear_ma7: number;
+  volatility_ma7: number;
+  momentum_7d: number;
+};
+
+export type AnalyticsMover = {
+  ticker: string;
+  current_mentions: number;
+  current_weighted_score: number;
+  previous_weighted_score: number;
+  score_delta: number;
+  mention_delta: number;
+};
+
+export type AnalyticsSubredditPoint = {
+  subreddit: string;
+  mention_count: number;
+  weighted_score: number;
+  unclear_rate: number;
+  bullish_share: number;
+  bearish_share: number;
+  neutral_share: number;
+};
+
+export type AnalyticsRegimeBreakdown = {
+  risk_on_days: number;
+  balanced_days: number;
+  risk_off_days: number;
+  risk_on_share: number;
+  balanced_share: number;
+  risk_off_share: number;
+  regime_switches: number;
+  current_regime: string;
+};
+
+export type AnalyticsCorrelation = {
+  mentions_vs_abs_score: number;
+  unclear_vs_abs_score: number;
+  concentration_vs_unclear: number;
+};
+
+export type AnalyticsTickerInsight = {
+  ticker: string;
+  mention_count: number;
+  mention_share: number;
+  avg_weighted_score: number;
+  score_volatility: number;
+  latest_score: number;
+  previous_score: number;
+  momentum: number;
+  active_days: number;
+  unclear_rate: number;
+};
+
+export type AnalyticsWeekdayPoint = {
+  weekday: number;
+  label: string;
+  avg_weighted_score: number;
+  avg_mentions: number;
+  avg_unclear_rate: number;
+  samples: number;
+};
+
+export type AnalyticsResponse = {
+  subreddit: string;
+  days: number;
+  date_from: string;
+  date_to: string;
+  trend: AnalyticsDayPoint[];
+  rolling_trend: AnalyticsRollingPoint[];
+  market_summary: AnalyticsMarketSummary;
+  regime_breakdown: AnalyticsRegimeBreakdown;
+  correlations: AnalyticsCorrelation;
+  top_movers_up: AnalyticsMover[];
+  top_movers_down: AnalyticsMover[];
+  ticker_insights: AnalyticsTickerInsight[];
+  weekday_profile: AnalyticsWeekdayPoint[];
+  subreddit_snapshot: AnalyticsSubredditPoint[];
 };
 
 export type SubredditsResponse = {

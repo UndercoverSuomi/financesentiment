@@ -26,11 +26,17 @@ export default function CommentList({ comments }: Props) {
           style={{ marginLeft: `${Math.min(comment.depth, 6) * 14}px` }}
         >
           <div className='flex flex-wrap items-center gap-2 text-xs'>
-            <span className='score-pill score-pill-neutral'>{comment.author || '[deleted]'}</span>
-            <span className='score-pill score-pill-neutral'>score {comment.score}</span>
-            <span className='score-pill score-pill-neutral'>depth {comment.depth}</span>
+            <span className='score-pill score-pill-neutral' title='Comment-Autor (falls nicht geloescht).'>
+              {comment.author || '[deleted]'}
+            </span>
+            <span className='score-pill score-pill-neutral' title='Reddit-Score fuer diesen Kommentar.'>score {comment.score}</span>
+            <span className='score-pill score-pill-neutral' title='Tiefe im Kommentarbaum (0 = Top-Level).'>depth {comment.depth}</span>
             {comment.stance.map((s, idx) => (
-              <span key={`${comment.id}-${s.ticker}-${s.stance_label}-${idx}`} className={badgeClass(s.stance_label)}>
+              <span
+                key={`${comment.id}-${s.ticker}-${s.stance_label}-${idx}`}
+                className={badgeClass(s.stance_label)}
+                title='Ticker + klassifiziertes Stance-Label fuer diesen Kommentar.'
+              >
                 {s.ticker} {s.stance_label}
               </span>
             ))}

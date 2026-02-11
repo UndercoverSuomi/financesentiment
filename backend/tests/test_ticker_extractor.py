@@ -30,3 +30,6 @@ def test_ticker_extractor_avoids_cashtag_double_count_and_substring_synonyms() -
 
     false_positive_mentions = extractor.extract('metaphor pineapple')
     assert all(m.ticker not in {'META', 'AAPL'} for m in false_positive_mentions)
+
+    lower_cashtag_mentions = extractor.extract('$aapl keeps going')
+    assert any(m.ticker == 'AAPL' and m.source == 'cashtag' for m in lower_cashtag_mentions)

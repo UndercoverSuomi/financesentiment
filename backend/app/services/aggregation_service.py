@@ -20,6 +20,13 @@ class AggregationRecord:
 class AggregationMetrics:
     score_unweighted: float
     score_weighted: float
+    score_stddev_unweighted: float
+    ci95_low_unweighted: float
+    ci95_high_unweighted: float
+    valid_count: int
+    score_sum_unweighted: float
+    weighted_numerator: float
+    weighted_denominator: float
     mention_count: int
     bullish_count: int
     bearish_count: int
@@ -53,8 +60,10 @@ def compute_daily_scores(
         unclear_count = sum(1 for r in ticker_records if r.stance_label == 'UNCLEAR')
 
         valid = [r for r in ticker_records if r.stance_label != 'UNCLEAR']
-        if valid:
-            score_unweighted = sum(r.stance_score for r in valid) / len(valid)
+        valid_count = len(valid)
+        score_sum_unweighted = sum(r.stance_score for r in valid)
+        if valid_count > 0:
+            score_unweighted = score_sum_unweighted / valid_count
         else:
             score_unweighted = 0.0
 
@@ -75,9 +84,32 @@ def compute_daily_scores(
         else:
             score_weighted = score_unweighted
 
+        if valid_count > 1:
+            sq = sum((r.stance_score - score_unweighted) ** 2 for r in valid)
+            score_stddev_unweighted = math.sqrt(sq / (valid_count - 1))
+            se = score_stddev_unweighted / math.sqrt(valid_count)
+            margin = 1.96 * se
+            ci95_low_unweighted = max(score_unweighted - margin, -1.0)
+            ci95_high_unweighted = min(score_unweighted + margin, 1.0)
+        elif valid_count == 1:
+            score_stddev_unweighted = 0.0
+            ci95_low_unweighted = score_unweighted
+            ci95_high_unweighted = score_unweighted
+        else:
+            score_stddev_unweighted = 0.0
+            ci95_low_unweighted = 0.0
+            ci95_high_unweighted = 0.0
+
         output[ticker] = AggregationMetrics(
             score_unweighted=score_unweighted,
             score_weighted=score_weighted,
+            score_stddev_unweighted=score_stddev_unweighted,
+            ci95_low_unweighted=ci95_low_unweighted,
+            ci95_high_unweighted=ci95_high_unweighted,
+            valid_count=valid_count,
+            score_sum_unweighted=score_sum_unweighted,
+            weighted_numerator=weighted_numerator,
+            weighted_denominator=weighted_denominator,
             mention_count=mention_count,
             bullish_count=bullish_count,
             bearish_count=bearish_count,

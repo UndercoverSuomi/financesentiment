@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Index, Integer, String, Text
+from sqlalchemy import Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -21,4 +21,5 @@ class Stance(Base):
 
     __table_args__ = (
         Index('ix_stance_target_type_target_id', 'target_type', 'target_id'),
+        UniqueConstraint('target_type', 'target_id', 'ticker', name='uq_stance_target_ticker'),
     )

@@ -21,7 +21,7 @@ from app.services.aggregation_service import AggregationRecord, compute_daily_sc
 from app.services.external_extractor import ExternalExtractor
 from app.services.image_service import ImageService
 from app.services.reddit_client import RedditClient
-from app.services.reddit_parser import parse_listing_posts, parse_thread
+from app.services.reddit_parser import PendingMore, parse_listing_posts, parse_morechildren, parse_thread_with_more
 from app.services.stance_service import StanceService
 from app.services.ticker_extractor import TickerExtractor
 from app.utils.timezone import to_berlin_date, utc_now
@@ -88,68 +88,84 @@ class IngestionService:
         comments_count = 0
         mentions_count = 0
         stance_rows_count = 0
+        partial_errors: list[str] = []
 
         try:
-            listing_payload = await reddit_client.get_top_listing(
+            parsed_submissions = await self._fetch_listing_posts(
+                reddit_client=reddit_client,
                 subreddit=subreddit,
-                sort=self._settings.pull_sort,
-                t_param=self._settings.pull_t_param,
-                limit=self._settings.pull_limit,
             )
-            parsed_submissions = parse_listing_posts(listing_payload)
 
             for parsed_submission in parsed_submissions:
-                submission = self._upsert_submission(session, parsed_submission, pull_run.id)
-                submissions_count += 1
+                try:
+                    submission = self._upsert_submission(session, parsed_submission, pull_run.id)
+                    submissions_count += 1
 
-                thread_payload = await reddit_client.get_thread(parsed_submission.id)
-                _, parsed_comments = parse_thread(thread_payload)
-                comments_count += len(parsed_comments)
-
-                comment_ids = [c.id for c in parsed_comments]
-                existing_comment_ids = self._comment_ids_for_submission(session, submission.id)
-                all_comment_ids = sorted(existing_comment_ids.union(comment_ids))
-
-                self._clear_analysis_rows(session, submission.id, all_comment_ids)
-
-                stale_comment_ids = sorted(existing_comment_ids.difference(comment_ids))
-                self._delete_comments(session, stale_comment_ids)
-
-                parent_lookup = {c.id: c.body for c in parsed_comments}
-                for parsed_comment in parsed_comments:
-                    self._upsert_comment(session, parsed_comment)
-
-                submission_mentions, submission_stance = self._analyze_submission(session, submission)
-                mentions_count += submission_mentions
-                stance_rows_count += submission_stance
-
-                comment_mentions, comment_stance = self._analyze_comments(
-                    session=session,
-                    submission=submission,
-                    parsed_comments=parsed_comments,
-                    parent_lookup=parent_lookup,
-                )
-                mentions_count += comment_mentions
-                stance_rows_count += comment_stance
-
-                if self._settings.enable_external_extraction and self._is_external_url(submission.url):
-                    extraction = await self._external_extractor.extract(submission.url)
-                    self._upsert_external_content(
-                        session=session,
-                        submission_id=submission.id,
-                        url=submission.url,
-                        title=extraction.title,
-                        text=extraction.text,
-                        status=extraction.status,
+                    thread_payload = await reddit_client.get_thread(
+                        parsed_submission.id,
+                        limit=self._settings.reddit_thread_limit,
+                        depth=self._settings.reddit_thread_depth,
                     )
+                    _, parsed_comments, pending_more = parse_thread_with_more(thread_payload)
+                    parsed_comments = await self._expand_morechildren(
+                        reddit_client=reddit_client,
+                        submission_id=parsed_submission.id,
+                        initial_comments=parsed_comments,
+                        initial_pending_more=pending_more,
+                    )
+                    comments_count += len(parsed_comments)
 
-                await self._store_images(session, submission, parsed_submission.raw, str(date_bucket))
-                session.commit()
+                    comment_ids = [c.id for c in parsed_comments]
+                    existing_comment_ids = self._comment_ids_for_submission(session, submission.id)
+                    all_comment_ids = sorted(existing_comment_ids.union(comment_ids))
+
+                    self._clear_analysis_rows(session, submission.id, all_comment_ids)
+
+                    stale_comment_ids = sorted(existing_comment_ids.difference(comment_ids))
+                    self._delete_comments(session, stale_comment_ids)
+
+                    parent_lookup = {c.id: c.body for c in parsed_comments}
+                    for parsed_comment in parsed_comments:
+                        self._upsert_comment(session, parsed_comment)
+
+                    submission_mentions, submission_stance = self._analyze_submission(session, submission)
+                    mentions_count += submission_mentions
+                    stance_rows_count += submission_stance
+
+                    comment_mentions, comment_stance = self._analyze_comments(
+                        session=session,
+                        submission=submission,
+                        parsed_comments=parsed_comments,
+                        parent_lookup=parent_lookup,
+                    )
+                    mentions_count += comment_mentions
+                    stance_rows_count += comment_stance
+
+                    if self._settings.enable_external_extraction and self._is_external_url(submission.url):
+                        extraction = await self._external_extractor.extract(submission.url)
+                        self._upsert_external_content(
+                            session=session,
+                            submission_id=submission.id,
+                            url=submission.url,
+                            title=extraction.title,
+                            text=extraction.text,
+                            status=extraction.status,
+                        )
+
+                    await self._store_images(session, submission, parsed_submission.raw, str(date_bucket))
+                    session.commit()
+                except Exception as exc:
+                    session.rollback()
+                    partial_errors.append(f'{parsed_submission.id}: {exc}')
+                    continue
 
             self._recompute_daily_scores(session=session, date_bucket=date_bucket, subreddit=subreddit)
+            warning = None
+            if partial_errors:
+                warning = f'partial errors: {len(partial_errors)}; sample: ' + ' | '.join(partial_errors[:3])
 
             pull_run.status = 'success'
-            pull_run.error = None
+            pull_run.error = warning
             session.add(pull_run)
             session.commit()
 
@@ -162,6 +178,7 @@ class IngestionService:
                 comments=comments_count,
                 mentions=mentions_count,
                 stance_rows=stance_rows_count,
+                error=warning,
             )
         except Exception as exc:
             session.rollback()
@@ -489,6 +506,13 @@ class IngestionService:
                     ticker=ticker,
                     score_unweighted=metrics.score_unweighted,
                     score_weighted=metrics.score_weighted,
+                    score_stddev_unweighted=metrics.score_stddev_unweighted,
+                    ci95_low_unweighted=metrics.ci95_low_unweighted,
+                    ci95_high_unweighted=metrics.ci95_high_unweighted,
+                    valid_count=metrics.valid_count,
+                    score_sum_unweighted=metrics.score_sum_unweighted,
+                    weighted_numerator=metrics.weighted_numerator,
+                    weighted_denominator=metrics.weighted_denominator,
                     mention_count=metrics.mention_count,
                     bullish_count=metrics.bullish_count,
                     bearish_count=metrics.bearish_count,
@@ -498,10 +522,98 @@ class IngestionService:
                 )
             )
 
-        session.commit()
+    async def _fetch_listing_posts(
+        self,
+        *,
+        reddit_client: RedditClient,
+        subreddit: str,
+    ) -> list:
+        page_limit = min(max(int(self._settings.pull_limit), 1), 100)
+        max_pages = max(int(self._settings.pull_max_pages), 1)
+
+        submissions: list = []
+        seen_submission_ids: set[str] = set()
+        after: str | None = None
+
+        for _ in range(max_pages):
+            try:
+                listing_payload = await reddit_client.get_top_listing(
+                    subreddit=subreddit,
+                    sort=self._settings.pull_sort,
+                    t_param=self._settings.pull_t_param,
+                    limit=page_limit,
+                    after=after,
+                )
+            except Exception:
+                if submissions:
+                    break
+                raise
+            parsed_page = parse_listing_posts(listing_payload)
+            for parsed in parsed_page:
+                if parsed.id in seen_submission_ids:
+                    continue
+                seen_submission_ids.add(parsed.id)
+                submissions.append(parsed)
+
+            next_after = listing_payload.get('data', {}).get('after') if isinstance(listing_payload, dict) else None
+            if not next_after:
+                break
+            after = str(next_after)
+
+        return submissions
 
     def _is_external_url(self, url: str) -> bool:
         host = urlparse(url).netloc.lower()
         if not host:
             return False
         return 'reddit.com' not in host and 'redd.it' not in host
+
+    async def _expand_morechildren(
+        self,
+        reddit_client: RedditClient,
+        submission_id: str,
+        initial_comments: list,
+        initial_pending_more: list[PendingMore],
+    ) -> list:
+        if not initial_pending_more:
+            return initial_comments
+
+        comments_by_id = {c.id: c for c in initial_comments}
+        parent_depths = {c.id: c.depth for c in initial_comments}
+        queue: list[PendingMore] = list(initial_pending_more)
+        requested_ids: set[str] = set()
+        api_calls = 0
+
+        while queue and api_calls < self._settings.reddit_morechildren_max_batches:
+            pending = queue.pop(0)
+            unresolved = [cid for cid in pending.children if cid not in comments_by_id and cid not in requested_ids]
+            if not unresolved:
+                continue
+
+            for chunk in self._chunked(unresolved, self._settings.reddit_morechildren_chunk_size):
+                requested_ids.update(chunk)
+                payload = await reddit_client.get_morechildren(post_id=submission_id, children=chunk)
+                parsed_comments, extra_pending = parse_morechildren(
+                    payload,
+                    submission_id=submission_id,
+                    parent_depths=parent_depths,
+                    fallback_parent_id=pending.parent_id,
+                    fallback_depth=pending.depth,
+                )
+
+                for parsed in parsed_comments:
+                    existing = comments_by_id.get(parsed.id)
+                    if existing is None or parsed.depth < existing.depth:
+                        comments_by_id[parsed.id] = parsed
+                        parent_depths[parsed.id] = parsed.depth
+
+                queue.extend(extra_pending)
+                api_calls += 1
+                if api_calls >= self._settings.reddit_morechildren_max_batches:
+                    break
+
+        return sorted(comments_by_id.values(), key=lambda c: (c.depth, c.created_utc))
+
+    def _chunked(self, items: list[str], size: int) -> list[list[str]]:
+        chunk_size = max(size, 1)
+        return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]

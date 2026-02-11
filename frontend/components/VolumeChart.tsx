@@ -1,3 +1,4 @@
+import HintLabel from '@/components/HintLabel';
 import type { TickerPoint } from '@/lib/types';
 
 type Props = {
@@ -13,8 +14,12 @@ export default function VolumeChart({ points }: Props) {
   return (
     <div className='panel pb-4'>
       <div className='mb-3 flex items-center justify-between gap-2'>
-        <h3 className='display text-lg font-semibold text-slate-900'>Mention Volume</h3>
-        <span className='score-pill score-pill-neutral'>total {total}</span>
+        <h3 className='display text-lg font-semibold text-slate-900'>
+          <HintLabel label='Mention Volume' hint='Anzahl erkannter Ticker-Mentions pro Zeitbucket.' />
+        </h3>
+        <span className='score-pill score-pill-neutral' title='Summe aller Mentions im dargestellten Fenster.'>
+          total {total}
+        </span>
       </div>
 
       <div className='space-y-2.5'>

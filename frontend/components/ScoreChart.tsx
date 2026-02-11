@@ -1,3 +1,5 @@
+import HintLabel from '@/components/HintLabel';
+import { formatScore } from '@/lib/format';
 import type { TickerPoint } from '@/lib/types';
 
 const CHART_WIDTH = 520;
@@ -47,8 +49,15 @@ export default function ScoreChart({ points }: Props) {
   return (
     <div className='panel pb-4'>
       <div className='mb-3 flex items-center justify-between gap-2'>
-        <h3 className='display text-lg font-semibold text-slate-900'>Weighted Stance</h3>
-        <span className={`score-pill ${toneClass}`}>latest {latest.toFixed(3)}</span>
+        <h3 className='display text-lg font-semibold text-slate-900'>
+          <HintLabel label='Weighted Stance' hint='Zeitreihe des gewichteten Stance-Scores (Range -1 bis 1).' />
+        </h3>
+        <span
+          className={`score-pill ${toneClass}`}
+          title='Neuester Punkt in der dargestellten Zeitreihe.'
+        >
+          latest {formatScore(latest)}
+        </span>
       </div>
 
       <svg viewBox={`0 0 ${CHART_WIDTH} 180`} className='h-48 w-full'>

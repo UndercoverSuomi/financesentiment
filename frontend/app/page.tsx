@@ -1,13 +1,19 @@
+import AnalyticsDeck from '@/components/AnalyticsDeck';
 import ErrorState from '@/components/ErrorState';
 import FiltersBar from '@/components/FiltersBar';
+import HintLabel from '@/components/HintLabel';
+import QualityPanel from '@/components/QualityPanel';
 import TickerTable from '@/components/TickerTable';
 import { apiGet, readableApiError } from '@/lib/api';
 import { formatPct, formatScore } from '@/lib/format';
-import type { ResultsResponse, SubredditsResponse } from '@/lib/types';
+import type { AnalyticsResponse, QualityResponse, ResultsResponse, SubredditsResponse } from '@/lib/types';
+import Link from 'next/link';
 
 type SearchParams = {
+  analytics_days?: string;
   date?: string;
   subreddit?: string;
+  window?: string;
 };
 
 function berlinTodayIsoDate(): string {
@@ -38,6 +44,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
   }
 
   const selectedDate = params.date || berlinTodayIsoDate();
+  const selectedResultsWindow: '24h' | '7d' = (params.window || '').toLowerCase() === '7d' ? '7d' : '24h';
+  const parsedAnalyticsDays = Number.parseInt(params.analytics_days || '21', 10);
+  const analyticsDays =
+    Number.isFinite(parsedAnalyticsDays) && parsedAnalyticsDays >= 7 && parsedAnalyticsDays <= 120
+      ? parsedAnalyticsDays
+      : 21;
   const requestedSubreddit = (params.subreddit || '').trim();
   const selectedSubreddit =
     !requestedSubreddit || requestedSubreddit.toUpperCase() === 'ALL'
@@ -54,11 +66,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
     );
   }
 
+  let results24: ResultsResponse;
+  let results7: ResultsResponse;
   let results: ResultsResponse;
   try {
     const subredditParam =
       selectedSubreddit === 'ALL' ? '' : `&subreddit=${encodeURIComponent(selectedSubreddit)}`;
-    results = await apiGet<ResultsResponse>(`/api/results?date=${encodeURIComponent(selectedDate)}${subredditParam}`);
+    [results24, results7] = await Promise.all([
+      apiGet<ResultsResponse>(`/api/results?date=${encodeURIComponent(selectedDate)}&window=24h${subredditParam}`),
+      apiGet<ResultsResponse>(`/api/results?date=${encodeURIComponent(selectedDate)}&window=7d${subredditParam}`),
+    ]);
+    results = selectedResultsWindow === '7d' ? results7 : results24;
   } catch (error) {
     return (
       <main className='space-y-6 py-4'>
@@ -66,12 +84,36 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
           subreddits={subreddits.subreddits}
           selectedSubreddit={selectedSubreddit}
           selectedDate={selectedDate}
+          selectedResultsWindow={selectedResultsWindow}
+          selectedAnalyticsDays={analyticsDays}
         />
         <ErrorState title='Results Unavailable' message={readableApiError(error)} />
       </main>
     );
   }
+  let quality: QualityResponse | null = null;
+  try {
+    const subredditParam =
+      selectedSubreddit === 'ALL' ? '' : `&subreddit=${encodeURIComponent(selectedSubreddit)}`;
+    quality = await apiGet<QualityResponse>(`/api/quality?date=${encodeURIComponent(selectedDate)}${subredditParam}`);
+  } catch {
+    quality = null;
+  }
+  let analytics: AnalyticsResponse | null = null;
+  try {
+    const subredditParam =
+      selectedSubreddit === 'ALL' ? '' : `&subreddit=${encodeURIComponent(selectedSubreddit)}`;
+    analytics = await apiGet<AnalyticsResponse>(
+      `/api/analytics?days=${analyticsDays}&date=${encodeURIComponent(selectedDate)}${subredditParam}`,
+    );
+  } catch {
+    analytics = null;
+  }
   const totalMentions = results.rows.reduce((sum, row) => sum + row.mention_count, 0);
+  const mentions24 = results24.rows.reduce((sum, row) => sum + row.mention_count, 0);
+  const mentions7 = results7.rows.reduce((sum, row) => sum + row.mention_count, 0);
+  const windowDeltaMentions = mentions7 - mentions24;
+  const windowAddsData = windowDeltaMentions > 0;
   const weightedScore =
     totalMentions > 0
       ? results.rows.reduce((sum, row) => sum + row.score_weighted * row.mention_count, 0) / totalMentions
@@ -84,6 +126,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
   const strongestDirectional = [...results.rows]
     .sort((a, b) => Math.abs(b.score_weighted) - Math.abs(a.score_weighted))
     .at(0);
+  const hasLegacyAggregationFields = results.rows.some(
+    (row) => !Number.isFinite(row.valid_count) || !Number.isFinite(row.ci95_low_unweighted) || !Number.isFinite(row.ci95_high_unweighted),
+  );
   const scoreBiasLabel = weightedScore > 0.15 ? 'risk-on' : weightedScore < -0.15 ? 'risk-off' : 'balanced';
   const scoreBarPct = Math.min(Math.max(((weightedScore + 1) / 2) * 100, 0), 100);
   const scopeLabel = selectedSubreddit === 'ALL' ? 'all configured subreddits' : `r/${selectedSubreddit}`;
@@ -93,26 +138,32 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
       <section className='panel fade-up'>
         <div className='grid gap-6 lg:grid-cols-[1.3fr_0.7fr]'>
           <div>
-            <p className='eyebrow'>Daily Pulse</p>
+            <p className='eyebrow'>Market Pulse</p>
             <h1 className='display mt-2 text-3xl font-bold text-slate-900 sm:text-4xl'>
               {scopeLabel} market tone
             </h1>
             <p className='mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base'>
               Live snapshot from ticker mentions, stance probabilities, and interaction-weighted aggregation for the
-              selected Berlin calendar day.
+              selected time window.
             </p>
 
             <div className='mt-5 grid gap-3 sm:grid-cols-3'>
               <article className='metric-card'>
-                <p className='eyebrow'>Mentions</p>
+                <p className='eyebrow'>
+                  <HintLabel label='Mentions' hint='Anzahl aller erkannten Ticker-Mentions (inklusive UNCLEAR).' />
+                </p>
                 <p className='display mt-1 text-3xl font-bold text-slate-900'>{totalMentions}</p>
               </article>
               <article className='metric-card'>
-                <p className='eyebrow'>Weighted Mood</p>
+                <p className='eyebrow'>
+                  <HintLabel label='Weighted Mood' hint='Gesamt-Score, gewichtet nach Interaktion und Decays.' />
+                </p>
                 <p className='display mt-1 text-3xl font-bold text-slate-900'>{formatScore(weightedScore)}</p>
               </article>
               <article className='metric-card'>
-                <p className='eyebrow'>Unclear Share</p>
+                <p className='eyebrow'>
+                  <HintLabel label='Unclear Share' hint='Anteil der Mentions, die als UNCLEAR klassifiziert wurden.' />
+                </p>
                 <p className='display mt-1 text-3xl font-bold text-slate-900'>{formatPct(overallUnclearRate)}</p>
               </article>
             </div>
@@ -122,7 +173,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
             <p className='eyebrow'>Quick Read</p>
             <div className='space-y-2 text-sm text-slate-700'>
               <p>
-                Date bucket: <span className='font-semibold'>{results.date_bucket_berlin}</span>
+                Time window:{' '}
+                <span className='font-semibold'>{results.window === '7d' ? 'Last 7 days' : 'Last 24h'}</span>
+              </p>
+              <p>
+                Date range: <span className='font-semibold'>{results.date_from} to {results.date_to}</span>
               </p>
               <p>
                 Highest volume ticker: <span className='font-semibold'>{loudestTicker}</span>
@@ -155,17 +210,53 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
         subreddits={subreddits.subreddits}
         selectedSubreddit={selectedSubreddit}
         selectedDate={selectedDate}
+        selectedResultsWindow={selectedResultsWindow}
+        selectedAnalyticsDays={analyticsDays}
       />
+
+      <section className='line-section fade-up flex flex-wrap items-center gap-2 pb-3 text-xs text-slate-600'>
+        <span className='score-pill score-pill-neutral'>24h mentions: {mentions24}</span>
+        <span className='score-pill score-pill-neutral'>7d mentions: {mentions7}</span>
+        <span className='score-pill score-pill-neutral'>
+          7d delta: {windowDeltaMentions >= 0 ? `+${windowDeltaMentions}` : windowDeltaMentions}
+        </span>
+        {!windowAddsData ? (
+          <span
+            className='score-pill score-pill-negative'
+            title='Wenn 7d nicht mehr liefert, gibt es fuer diesen Filter aktuell kaum/keine aelteren Inhalte im Datensatz. Erhoehe Pull-Historie (z.B. PULL_T_PARAM=week, hoehere PULL_LIMIT, regelmaessige Pulls).'
+          >
+            7d adds no extra data
+          </span>
+        ) : null}
+      </section>
+
+      {quality ? <QualityPanel quality={quality} /> : null}
+      {analytics ? <AnalyticsDeck analytics={analytics} /> : null}
+
+      {hasLegacyAggregationFields ? (
+        <section className='error-state fade-up text-sm text-slate-700'>
+          Einige Zeilen stammen aus Legacy-Aggregationen ohne exakte CI/Valid-N Felder.
+          <span
+            className='ml-2 underline decoration-dotted'
+            title='Die UI zeigt in diesem Fall vernuenftige Fallbacks an. Fuer exakte Werte: Backend neu starten, Migrationen anwenden und die Daten fuer den Tag neu aggregieren.'
+          >
+            mehr Infos
+          </span>
+        </section>
+      ) : null}
 
       <section className='fade-up space-y-3'>
         <div className='flex flex-wrap items-end justify-between gap-3'>
           <div>
             <h2 className='display text-2xl font-bold text-slate-900'>Top Tickers</h2>
             <p className='text-sm text-slate-600'>
-              Sorted by mention volume and weighted stance for {scopeLabel}.
+              Sorted by mention volume and weighted stance for {scopeLabel} in the selected time window.
             </p>
           </div>
-          <span className='score-pill score-pill-neutral'>{results.rows.length} ticker rows</span>
+          <div className='flex flex-wrap items-center gap-2'>
+            <span className='score-pill score-pill-neutral'>{results.rows.length} ticker rows</span>
+            <Link href='/research' className='score-pill score-pill-neutral'>Open Research Lab</Link>
+          </div>
         </div>
         <TickerTable rows={results.rows} />
       </section>

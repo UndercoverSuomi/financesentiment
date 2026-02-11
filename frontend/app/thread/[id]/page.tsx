@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import CommentList from '@/components/CommentList';
 import ErrorState from '@/components/ErrorState';
+import HintLabel from '@/components/HintLabel';
 import { apiGet, readableApiError } from '@/lib/api';
 import type { ThreadResponse } from '@/lib/types';
 
@@ -31,7 +32,12 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
           <Link href='/' className='score-pill score-pill-neutral'>
             back to dashboard
           </Link>
-          <span className='score-pill score-pill-neutral'>{submissionStanceCount} submission stance rows</span>
+          <span
+            className='score-pill score-pill-neutral'
+            title='Anzahl erkannter Stance-Zeilen direkt auf Submission-Ebene.'
+          >
+            {submissionStanceCount} submission stance rows
+          </span>
         </div>
 
         <h1 className='display text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl'>{data.submission.title}</h1>
@@ -40,15 +46,17 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
         ) : null}
 
         <div className='mt-4 flex flex-wrap items-center gap-2 text-xs'>
-          <span className='score-pill score-pill-neutral'>r/{data.submission.subreddit}</span>
-          <span className='score-pill score-pill-neutral'>score {data.submission.score}</span>
-          <span className='score-pill score-pill-neutral'>{data.submission.num_comments} comments</span>
-          <span className='score-pill score-pill-neutral'>id {data.submission.id}</span>
+          <span className='score-pill score-pill-neutral' title='Subreddit der Submission.'>r/{data.submission.subreddit}</span>
+          <span className='score-pill score-pill-neutral' title='Reddit-Score laut API.'>score {data.submission.score}</span>
+          <span className='score-pill score-pill-neutral' title='Von Reddit gemeldete Kommentaranzahl.'>{data.submission.num_comments} comments</span>
+          <span className='score-pill score-pill-neutral' title='Interne Submission-ID fuer Drilldown und Reproduzierbarkeit.'>id {data.submission.id}</span>
         </div>
       </section>
 
       <section className='space-y-3'>
-        <h2 className='display text-2xl font-semibold text-slate-900'>Comments + Ticker Stance</h2>
+        <h2 className='display text-2xl font-semibold text-slate-900'>
+          <HintLabel label='Comments + Ticker Stance' hint='Hier siehst du Kommentare mit extrahierten Tickern und zugeordneten Stance-Labels.' />
+        </h2>
         <CommentList comments={data.comments} />
       </section>
     </main>

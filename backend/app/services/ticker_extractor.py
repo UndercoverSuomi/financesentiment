@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.core.config import Settings
 
-CASHTAG_RE = re.compile(r'\$([A-Z][A-Z\.]{0,4})\b')
+CASHTAG_RE = re.compile(r'\$([A-Za-z][A-Za-z\.]{0,4})\b')
 # Avoid double-counting "$AAPL" as both cashtag and plain token.
 TOKEN_RE = re.compile(r'(?<!\$)\b([A-Z]{1,5}(?:\.[A-Z])?)\b')
 
