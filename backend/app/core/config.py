@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=str(REPO_ROOT / '.env'), env_file_encoding='utf-8', extra='ignore')
+
+    app_name: str = 'FinanceSentiment'
+    environment: str = 'dev'
+
+    database_url: str = 'sqlite:///./backend/data/app.db'
+
+    reddit_base_url: str = 'https://www.reddit.com'
+    reddit_user_agent: str = 'financesentiment/0.1 (contact: email_or_repo)'
+    reddit_timeout_connect: float = 3.0
+    reddit_timeout_read: float = 20.0
+    reddit_max_concurrency: int = 3
+    reddit_max_retries: int = 4
+    reddit_backoff_base: float = 0.75
+
+    subreddits_csv: str = 'wallstreetbets,stocks,investing,finance'
+    pull_sort: str = 'top'
+    pull_t_param: str = 'day'
+    pull_limit: int = 10
+
+    enable_external_extraction: bool = False
+    extraction_text_cap: int = 50000
+
+    download_images: bool = False
+    image_max_size_bytes: int = 8_000_000
+
+    use_finbert: bool = False
+    unclear_threshold: float = 0.55
+    unclear_short_text_len: int = 20
+
+    use_depth_decay: bool = True
+    lambda_depth: float = 0.15
+    use_time_decay: bool = False
+    lambda_time: float = 0.05
+
+    frontend_origin: str = 'http://localhost:3000'
+
+    ticker_master_path: str = 'tickers_sample.csv'
+    synonyms_path: str = 'synonyms.json'
+    stoplist_path: str = 'stoplist.json'
+
+    @property
+    def repo_root(self) -> Path:
+        return Path(__file__).resolve().parents[3]
+
+    @property
+    def backend_root(self) -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    @property
+    def data_dir(self) -> Path:
+        return self.backend_root / 'data'
+
+    @property
+    def resolved_database_url(self) -> str:
+        if self.database_url.startswith('sqlite:///./'):
+            rel_path = self.database_url.removeprefix('sqlite:///./')
+            absolute_path = (self.repo_root / rel_path).resolve()
+            absolute_path.parent.mkdir(parents=True, exist_ok=True)
+            return f"sqlite:///{absolute_path.as_posix()}"
+        return self.database_url
+
+    @property
+    def image_root(self) -> Path:
+        return self.repo_root / 'data' / 'images'
+
+    @property
+    def subreddits(self) -> list[str]:
+        return [s.strip() for s in self.subreddits_csv.split(',') if s.strip()]
+
+    @property
+    def ticker_master_file(self) -> Path:
+        return self.repo_root / self.ticker_master_path
+
+    @property
+    def synonyms_file(self) -> Path:
+        return self.repo_root / self.synonyms_path
+
+    @property
+    def stoplist_file(self) -> Path:
+        return self.repo_root / self.stoplist_path
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()

@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f8fafc;
+  --bg-soft: #eff4f8;
+  --line: #d6dee8;
+  --ink: #0f1720;
+  --muted: #5f6f80;
+  --accent: #1769e5;
+  --positive: #0d9468;
+  --positive-soft: rgba(13, 148, 104, 0.1);
+  --negative: #c24848;
+  --negative-soft: rgba(194, 72, 72, 0.1);
+  --neutral-soft: rgba(95, 111, 128, 0.12);
+}
+
+body {
+  font-family: var(--font-ui), 'Segoe UI', sans-serif;
+  background:
+    radial-gradient(900px 520px at 8% -8%, rgba(23, 105, 229, 0.11), transparent 58%),
+    radial-gradient(780px 440px at 96% -10%, rgba(13, 148, 104, 0.09), transparent 60%),
+    linear-gradient(180deg, var(--bg), var(--bg-soft));
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+.app-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.panel {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  @apply py-5;
+}
+
+.eyebrow {
+  letter-spacing: 0.11em;
+  color: var(--muted);
+  @apply text-[11px] font-semibold uppercase;
+}
+
+.display {
+  font-family: var(--font-display), 'Segoe UI', sans-serif;
+  letter-spacing: -0.024em;
+}
+
+.metric-card {
+  border-left: 2px solid var(--line);
+  @apply pl-4;
+}
+
+.btn-main {
+  background: linear-gradient(120deg, var(--accent), #2057ca);
+  color: #fff;
+  @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition-all duration-200;
+}
+
+.btn-main:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.field {
+  border-bottom: 1px solid rgba(15, 23, 32, 0.22);
+  background: transparent;
+  color: var(--ink);
+  @apply w-full rounded-none px-0 py-2.5 text-sm outline-none transition duration-150;
+}
+
+.field:focus {
+  border-color: rgba(23, 105, 229, 0.75);
+  box-shadow: inset 0 -1px 0 rgba(23, 105, 229, 0.75);
+}
+
+.score-pill {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold;
+}
+
+.score-pill-positive {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+
+.score-pill-negative {
+  background: var(--negative-soft);
+  color: var(--negative);
+}
+
+.score-pill-neutral {
+  background: var(--neutral-soft);
+  color: #4e5f72;
+}
+
+.text-link {
+  color: var(--accent);
+  @apply text-sm font-medium transition-colors;
+}
+
+.text-link:hover {
+  color: #154ea8;
+}
+
+.line-section {
+  border-bottom: 1px solid var(--line);
+  @apply pb-4;
+}
+
+.error-state {
+  border-left: 2px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  @apply px-4 py-3;
+}
+
+.thread-lane {
+  border-left: 1px dashed rgba(15, 23, 32, 0.2);
+}
+
+.context-box {
+  background: rgba(240, 246, 252, 0.8);
+  border-left: 2px solid rgba(15, 23, 32, 0.14);
+  @apply p-3 text-xs;
+}
+
+.fade-up {
+  animation: fade-up 0.4s ease both;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

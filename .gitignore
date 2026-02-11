@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Virtual envs
+.venv/
+venv/
+
+# Backend data
+backend/data/*.db
+backend/data/*.sqlite
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+
+# Env
+.env
