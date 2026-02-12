@@ -17,23 +17,35 @@ class Settings(BaseSettings):
 
     database_url: str = 'sqlite:///./backend/data/app.db'
 
-    reddit_base_url: str = 'https://www.reddit.com'
+    reddit_use_official_api: bool = True
+    reddit_base_url: str = 'https://oauth.reddit.com'
+    reddit_oauth_token_url: str = 'https://www.reddit.com/api/v1/access_token'
+    reddit_client_id: str = ''
+    reddit_client_secret: str = ''
+    reddit_oauth_scope: str = 'read'
     reddit_user_agent: str = 'financesentiment/0.1 (contact: email_or_repo)'
     reddit_timeout_connect: float = 3.0
     reddit_timeout_read: float = 20.0
     reddit_max_concurrency: int = 1
+    reddit_max_requests_per_minute: int = 90
     reddit_max_retries: int = 4
     reddit_backoff_base: float = 1.25
+    reddit_min_request_interval_seconds: float = 0.7
+    reddit_proxy_urls_csv: str = ''
+    reddit_proxy_rotation_mode: str = 'round_robin'
+    reddit_proxy_failure_cooldown_seconds: float = 180.0
+    reddit_proxy_include_direct_fallback: bool = True
     reddit_thread_limit: int = 500
     reddit_thread_depth: int = 32
     reddit_morechildren_chunk_size: int = 100
-    reddit_morechildren_max_batches: int = 30
+    reddit_morechildren_max_batches: int = 0
 
     subreddits_csv: str = 'wallstreetbets,stocks,investing,finance'
     pull_sort: str = 'top'
-    pull_t_param: str = 'week'
-    pull_limit: int = 100
-    pull_max_pages: int = 8
+    pull_t_param: str = 'day'
+    pull_limit: int = 20
+    pull_max_pages: int = 1
+    pull_subreddit_pause_seconds: float = 2.0
 
     enable_external_extraction: bool = False
     extraction_text_cap: int = 50000
@@ -44,7 +56,7 @@ class Settings(BaseSettings):
     use_finbert: bool = False
     unclear_threshold: float = 0.55
     unclear_short_text_len: int = 20
-    inherit_parent_tickers_for_comments: bool = True
+    inherit_parent_tickers_for_comments: bool = False
     inherit_title_tickers_for_comments: bool = False
     allow_context_label_inference: bool = False
 
@@ -54,6 +66,7 @@ class Settings(BaseSettings):
     lambda_time: float = 0.05
 
     frontend_origin: str = 'http://localhost:3000'
+    frontend_origins_csv: str = 'http://localhost:3000,http://127.0.0.1:3000'
 
     ticker_master_path: str = 'tickers_sample.csv'
     synonyms_path: str = 'synonyms.json'
@@ -89,6 +102,32 @@ class Settings(BaseSettings):
     @property
     def subreddits(self) -> list[str]:
         return [s.strip() for s in self.subreddits_csv.split(',') if s.strip()]
+
+    @property
+    def reddit_proxy_urls(self) -> list[str]:
+        raw = [s.strip() for s in self.reddit_proxy_urls_csv.split(',') if s.strip()]
+        seen: set[str] = set()
+        out: list[str] = []
+        for proxy_url in raw:
+            if proxy_url in seen:
+                continue
+            seen.add(proxy_url)
+            out.append(proxy_url)
+        return out
+
+    @property
+    def frontend_origins(self) -> list[str]:
+        raw = [s.strip() for s in self.frontend_origins_csv.split(',') if s.strip()]
+        if self.frontend_origin and self.frontend_origin not in raw:
+            raw.append(self.frontend_origin)
+        seen: set[str] = set()
+        out: list[str] = []
+        for origin in raw:
+            if origin in seen:
+                continue
+            seen.add(origin)
+            out.append(origin)
+        return out
 
     @property
     def ticker_master_file(self) -> Path:

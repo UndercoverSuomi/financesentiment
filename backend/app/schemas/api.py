@@ -26,6 +26,50 @@ class PullSummary(BaseModel):
     error: str | None = None
 
 
+class PullRunStatusOut(BaseModel):
+    subreddit: str
+    status: str
+    pulled_at_utc: datetime
+    date_bucket_berlin: date
+    error: str | None = None
+
+
+class PullStatusOverview(BaseModel):
+    generated_at_utc: datetime
+    overall_last_success_utc: datetime | None
+    running_subreddits: list[str]
+    failed_subreddits: list[str]
+    subreddits_without_success: list[str]
+    latest_by_subreddit: list[PullRunStatusOut]
+    last_success_by_subreddit: list[PullRunStatusOut]
+
+
+class PullJobStatus(BaseModel):
+    job_id: str
+    mode: str
+    requested_subreddit: str | None
+    status: str
+    started_at_utc: datetime
+    finished_at_utc: datetime | None
+    total_steps: int
+    completed_steps: int
+    progress: float
+    current_subreddit: str | None
+    current_phase: str | None = None
+    current_subreddit_progress: float = 0.0
+    current_total_submissions: int | None = None
+    current_processed_submissions: int = 0
+    current_submission_id: str | None = None
+    current_submissions: int = 0
+    current_comments: int = 0
+    current_mentions: int = 0
+    current_stance_rows: int = 0
+    current_partial_errors: int = 0
+    heartbeat_utc: datetime | None = None
+    summaries: list[PullSummary]
+    error: str | None = None
+
+
 class DailyScoreOut(BaseModel):
     date_bucket_berlin: date
     subreddit: str

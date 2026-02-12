@@ -2,11 +2,12 @@ import AnalyticsDeck from '@/components/AnalyticsDeck';
 import ErrorState from '@/components/ErrorState';
 import FiltersBar from '@/components/FiltersBar';
 import HintLabel from '@/components/HintLabel';
+import PullControlPanel from '@/components/PullControlPanel';
 import QualityPanel from '@/components/QualityPanel';
 import TickerTable from '@/components/TickerTable';
 import { apiGet, readableApiError } from '@/lib/api';
 import { formatPct, formatScore } from '@/lib/format';
-import type { AnalyticsResponse, QualityResponse, ResultsResponse, SubredditsResponse } from '@/lib/types';
+import type { AnalyticsResponse, PullStatusOverview, QualityResponse, ResultsResponse, SubredditsResponse } from '@/lib/types';
 import Link from 'next/link';
 
 type SearchParams = {
@@ -41,6 +42,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
         <ErrorState title='Backend API Error' message={readableApiError(error)} />
       </main>
     );
+  }
+  let pullStatus: PullStatusOverview | null = null;
+  try {
+    pullStatus = await apiGet<PullStatusOverview>('/api/pull/status');
+  } catch {
+    pullStatus = null;
   }
 
   const selectedDate = params.date || berlinTodayIsoDate();
@@ -113,7 +120,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
   const mentions24 = results24.rows.reduce((sum, row) => sum + row.mention_count, 0);
   const mentions7 = results7.rows.reduce((sum, row) => sum + row.mention_count, 0);
   const windowDeltaMentions = mentions7 - mentions24;
+  const hasAnyWindowData = mentions24 > 0 || mentions7 > 0;
   const windowAddsData = windowDeltaMentions > 0;
+  const showNoExtraDataFlag = hasAnyWindowData && !windowAddsData;
   const weightedScore =
     totalMentions > 0
       ? results.rows.reduce((sum, row) => sum + row.score_weighted * row.mention_count, 0) / totalMentions
@@ -132,6 +141,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
   const scoreBiasLabel = weightedScore > 0.15 ? 'risk-on' : weightedScore < -0.15 ? 'risk-off' : 'balanced';
   const scoreBarPct = Math.min(Math.max(((weightedScore + 1) / 2) * 100, 0), 100);
   const scopeLabel = selectedSubreddit === 'ALL' ? 'all configured subreddits' : `r/${selectedSubreddit}`;
+  const selectedSubredditWithoutSuccess =
+    selectedSubreddit !== 'ALL'
+      ? (pullStatus?.subreddits_without_success.includes(selectedSubreddit) ?? false)
+      : false;
+  const highUnclearWarning = quality ? quality.unclear_rate >= 0.35 : false;
 
   return (
     <main className='space-y-5'>
@@ -206,6 +220,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
         </div>
       </section>
 
+      <PullControlPanel
+        subreddits={subreddits.subreddits}
+        selectedSubreddit={selectedSubreddit}
+        initialOverview={pullStatus}
+      />
+
       <FiltersBar
         subreddits={subreddits.subreddits}
         selectedSubreddit={selectedSubreddit}
@@ -215,22 +235,47 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
       />
 
       <section className='line-section fade-up flex flex-wrap items-center gap-2 pb-3 text-xs text-slate-600'>
-        <span className='score-pill score-pill-neutral'>24h mentions: {mentions24}</span>
-        <span className='score-pill score-pill-neutral'>7d mentions: {mentions7}</span>
-        <span className='score-pill score-pill-neutral'>
-          7d delta: {windowDeltaMentions >= 0 ? `+${windowDeltaMentions}` : windowDeltaMentions}
-        </span>
-        {!windowAddsData ? (
-          <span
-            className='score-pill score-pill-negative'
-            title='Wenn 7d nicht mehr liefert, gibt es fuer diesen Filter aktuell kaum/keine aelteren Inhalte im Datensatz. Erhoehe Pull-Historie (z.B. PULL_T_PARAM=week, hoehere PULL_LIMIT, regelmaessige Pulls).'
-          >
-            7d adds no extra data
-          </span>
-        ) : null}
+        {hasAnyWindowData ? (
+          <>
+            <span className='score-pill score-pill-neutral'>24h mentions: {mentions24}</span>
+            <span className='score-pill score-pill-neutral'>| 7d mentions: {mentions7}</span>
+            <span className='score-pill score-pill-neutral'>
+              | 7d delta: {windowDeltaMentions >= 0 ? `+${windowDeltaMentions}` : windowDeltaMentions}
+            </span>
+            {showNoExtraDataFlag ? (
+              <span
+                className='score-pill score-pill-negative'
+                title='Wenn 7d nicht mehr liefert, gibt es fuer diesen Filter aktuell kaum/keine aelteren Inhalte im Datensatz. Erhoehe Pull-Historie (z.B. PULL_T_PARAM=week, hoehere PULL_LIMIT, regelmaessige Pulls).'
+              >
+                7d adds no extra data
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <span className='score-pill score-pill-negative'>No data for current filter yet</span>
+            {selectedSubreddit !== 'ALL' ? (
+              <span className='score-pill score-pill-neutral'>Try pulling r/{selectedSubreddit}</span>
+            ) : null}
+            {selectedSubredditWithoutSuccess ? (
+              <span className='score-pill score-pill-neutral'>
+                No successful pull recorded yet for r/{selectedSubreddit}
+              </span>
+            ) : null}
+          </>
+        )}
       </section>
 
       {quality ? <QualityPanel quality={quality} /> : null}
+      {quality && highUnclearWarning ? (
+        <section className='error-state fade-up text-sm text-slate-700'>
+          UNCLEAR ist aktuell hoch ({formatPct(quality.unclear_rate)}).
+          <span className='ml-1'>
+            Kontext-Mentions liegen bei {formatPct(quality.context_mention_rate)} und koennen die UNCLEAR-Rate stark
+            erhoehen.
+          </span>
+        </section>
+      ) : null}
       {analytics ? <AnalyticsDeck analytics={analytics} /> : null}
 
       {hasLegacyAggregationFields ? (

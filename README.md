@@ -2,7 +2,7 @@
 
 Reddit ticker-targeted stance analytics MVP.
 
-This project ingests Reddit `.json` endpoints server-side, parses full comment trees, extracts ticker mentions, computes per-ticker stance (`BULLISH`, `BEARISH`, `NEUTRAL`, `UNCLEAR`), aggregates daily scores by `(date_bucket_berlin, subreddit, ticker)`, and serves a dashboard UI.
+This project ingests Reddit JSON via the official OAuth API server-side, parses full comment trees, extracts ticker mentions, computes per-ticker stance (`BULLISH`, `BEARISH`, `NEUTRAL`, `UNCLEAR`), aggregates daily scores by `(date_bucket_berlin, subreddit, ticker)`, and serves a dashboard UI.
 
 ## Architecture
 
@@ -67,12 +67,14 @@ Daily aggregation stores:
 ## Hard constraints implemented
 
 - Frontend never calls Reddit directly.
-- Backend uses structured Reddit JSON endpoints only:
+- Backend uses structured Reddit JSON endpoints only (official OAuth API host):
   - `/r/{subreddit}/top.json?...&raw_json=1`
   - `/comments/{post_id}.json?...&raw_json=1`
 - User-Agent and `Accept: application/json` set on Reddit requests.
+- OAuth access tokens are fetched via `client_credentials` and attached as `Authorization: Bearer ...`.
 - Reddit rate limiting/backoff/caching implemented:
   - semaphore concurrency limit
+  - hard rolling requests-per-minute guard (`REDDIT_MAX_REQUESTS_PER_MINUTE`, default `90`)
   - retries on `429/5xx`
   - `Retry-After` respected
   - in-memory per-run URL cache
@@ -80,6 +82,22 @@ Daily aggregation stores:
 - `more` placeholders are expanded via `/api/morechildren.json` (batched) for higher thread completeness.
 
 ## Quickstart
+
+### 0) One-command dev start (recommended)
+
+From repo root:
+
+```bash
+python scripts/dev_up.py
+```
+
+Windows PowerShell shortcut:
+
+```powershell
+.\start-dev.ps1
+```
+
+This boots backend + frontend together, including setup checks (venv/deps/migrations) on first run.
 
 ### 1) Backend
 
@@ -120,26 +138,50 @@ Defaults:
 
 - subreddits: `StockMarket,wallstreetbetsGER,ValueInvesting,Finanzen,wallstreetbets,stocks,investing,Aktien`
 - sort: `top`
-- time window: `t=week`
-- posts per page: `100`
-- listing pages per pull: `8` (bis zu ~800 Posts pro Subreddit/Pull, falls Reddit so viel liefert)
+- time window: `t=day`
+- posts per page: `20`
+- listing pages per pull: `1` (Top-20 Posts pro Subreddit/Pull)
 - thread depth: `32`
-- morechildren batch cap: `30`
+- morechildren batch cap: `0` (`0` bedeutet ohne festen Batch-Cap, also maximale Kommentarabdeckung)
+- official API mode: `REDDIT_USE_OFFICIAL_API=true`
+- oauth API host: `REDDIT_BASE_URL=https://oauth.reddit.com`
+- oauth token endpoint: `REDDIT_OAUTH_TOKEN_URL=https://www.reddit.com/api/v1/access_token`
+- oauth scope: `REDDIT_OAUTH_SCOPE=read`
+- required: `REDDIT_CLIENT_ID` (+ optional `REDDIT_CLIENT_SECRET` je nach App-Typ)
 - concurrency: `1` (stabiler gegen Rate-Limits)
-- backoff base: `1.25`
+- max request rate: `90 RPM` (unterhalb des 100 RPM Free-Limits)
+- backoff base: `2.0`
+- min request interval: `0.70s`
+- pause between subreddits in pull-all: `2.0s`
+- proxy rotation: disabled by default (`REDDIT_PROXY_URLS_CSV` empty)
 
-### "Alles nehmen" - was realistisch geht
+### Official API setup (kostenloser Modus)
 
-Die App ist jetzt auf sehr breite Abdeckung eingestellt:
+1. Erstelle eine Reddit-App unter `reddit.com/prefs/apps`.
+2. Trage in `.env` mindestens `REDDIT_CLIENT_ID` ein.
+3. Falls deine App einen Secret hat, setze auch `REDDIT_CLIENT_SECRET`.
+4. Nutze einen klaren `REDDIT_USER_AGENT` mit Kontakt (Reddit Policy).
+5. Lass `REDDIT_MAX_REQUESTS_PER_MINUTE=90`, um unter dem 100 RPM Free-Limit zu bleiben.
 
-- `PULL_T_PARAM=week`
-- `PULL_LIMIT=100` (Reddit-API-Obergrenze pro Listing-Seite)
-- `PULL_MAX_PAGES=8` (Pagination ueber weitere Seiten)
-- `REDDIT_MORECHILDREN_MAX_BATCHES=30` (mehr Kommentar-Aufloesung, aber noch stabil)
-- `REDDIT_MAX_CONCURRENCY=1` + `REDDIT_BACKOFF_BASE=1.25` (weniger 429-Fehler)
+Wenn `REDDIT_USE_OFFICIAL_API=true` und `REDDIT_CLIENT_ID` fehlt, bricht der Pull mit klarer Fehlermeldung ab.
 
-Das kommt sehr nah an "alles aus der Woche" fuer die gewaehlten Subreddits.
-Vollstaendig "absolut alles" garantiert die Reddit-API dennoch nicht (Ranking, API-Limits, geloeschte Inhalte, Rate-Limits).
+### "Top-20 / 24h + moeglichst alle Kommentare" (aktuelles Setup)
+
+Die App ist jetzt auf schnellere Pulls pro Subreddit eingestellt, bei gleichzeitig tiefer Kommentarabdeckung:
+
+- `PULL_SORT=top`
+- `PULL_T_PARAM=day`
+- `PULL_LIMIT=20`
+- `PULL_MAX_PAGES=1`
+- `REDDIT_MORECHILDREN_MAX_BATCHES=0` (`0` = unbegrenzt viele MoreChildren-Batches pro Submission)
+- `REDDIT_MAX_CONCURRENCY=1`, `REDDIT_BACKOFF_BASE=2.0`, `REDDIT_MIN_REQUEST_INTERVAL_SECONDS=0.45`
+- `PULL_SUBREDDIT_PAUSE_SECONDS=2.0` (weniger Burst-Spitzen bei `pull all`)
+
+Tradeoff:
+
+- deutlich schneller als "1000 Posts pro Subreddit"
+- dafuer nur Top-20 Posts der letzten 24h
+- Kommentarabdeckung pro gewaehltem Post ist maximal ausgelegt (ohne festen Batch-Cap), bleibt aber von Reddit-API-Limits/Timeouts abhaengig
 
 ## Ingestion and reproducibility
 
@@ -162,6 +204,15 @@ Trigger pulls via API:
 
 - `POST /api/pull?subreddit=stocks`
 - `POST /api/pull_all`
+- `POST /api/pull/start?subreddit=stocks` (background job)
+- `POST /api/pull/start` (all configured subreddits; prevents duplicate parallel runs)
+- `GET /api/pull/jobs/{job_id}` (progress polling)
+- `GET /api/pull/status` (latest per-subreddit status + last successful pull)
+
+Local browser/CORS hint:
+
+- if you open frontend via `http://127.0.0.1:3000`, backend CORS must allow that origin too.
+- defaults now include both `http://localhost:3000` and `http://127.0.0.1:3000` via `FRONTEND_ORIGINS_CSV`.
 
 Or CLI:
 
@@ -181,6 +232,9 @@ python scripts/build_ticker_universe.py tickers_master.csv source_us.csv source_
 - `GET /api/subreddits`
 - `POST /api/pull?subreddit=...`
 - `POST /api/pull_all`
+- `POST /api/pull/start?subreddit=...` (background job, `subreddit=ALL|*|empty` => all)
+- `GET /api/pull/jobs/{job_id}` (job progress/status)
+- `GET /api/pull/status` (latest run status + last successful pull overview)
 - `GET /api/results?date=YYYY-MM-DD&window=24h|7d&subreddit=...`
 - `GET /api/analytics?days=21&date=YYYY-MM-DD&subreddit=...`
 - `GET /api/quality?date=YYYY-MM-DD&subreddit=...`
@@ -231,6 +285,20 @@ Set `USE_FINBERT=true`.
 - if FinBERT is unavailable or fails to load, app falls back to deterministic CPU-safe model
 - to enable FinBERT inference, install `transformers` (+ runtime dependencies) in backend env
 
+### Proxy rotation (optional)
+
+Set one or more outbound proxies:
+
+- `REDDIT_PROXY_URLS_CSV=http://user:pass@proxy1:8080,http://user:pass@proxy2:8080`
+- `REDDIT_PROXY_ROTATION_MODE=round_robin` (`random` also supported)
+- `REDDIT_PROXY_FAILURE_COOLDOWN_SECONDS=180`
+- `REDDIT_PROXY_INCLUDE_DIRECT_FALLBACK=true`
+
+Notes:
+
+- This improves resilience against temporary IP-specific throttling.
+- It does **not** guarantee full 24h completeness because Reddit endpoint limits/ranking still apply.
+
 ## Tests
 
 Run:
@@ -249,7 +317,7 @@ Included tests:
 
 ## Limitations
 
-- Top-10 daily listing sample introduces selection bias.
+- Top-20 daily listing sample introduces selection bias.
 - Reddit text sarcasm/irony can reduce stance accuracy.
 - Bots, brigading, and meme language may skew signal.
 - Ticker ambiguity remains for short uppercase tokens.

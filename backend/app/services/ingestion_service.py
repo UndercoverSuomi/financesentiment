@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Callable
 from urllib.parse import urlparse
 
 from sqlalchemy import and_, delete, or_, select
@@ -40,6 +41,23 @@ class PullExecutionResult:
     error: str | None = None
 
 
+@dataclass(slots=True)
+class PullProgressUpdate:
+    subreddit: str
+    phase: str
+    total_submissions: int | None
+    processed_submissions: int
+    current_submission_id: str | None
+    submissions: int
+    comments: int
+    mentions: int
+    stance_rows: int
+    partial_errors: int
+
+
+PullProgressCallback = Callable[[PullProgressUpdate], None]
+
+
 class IngestionService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -48,10 +66,20 @@ class IngestionService:
         self._external_extractor = ExternalExtractor(settings)
         self._image_service = ImageService(settings)
 
-    async def pull_subreddit(self, session: Session, subreddit: str) -> PullExecutionResult:
+    async def pull_subreddit(
+        self,
+        session: Session,
+        subreddit: str,
+        on_progress: PullProgressCallback | None = None,
+    ) -> PullExecutionResult:
         async with RedditClient(self._settings) as reddit_client:
             reddit_client.reset_run_cache()
-            return await self._pull_with_client(session=session, subreddit=subreddit, reddit_client=reddit_client)
+            return await self._pull_with_client(
+                session=session,
+                subreddit=subreddit,
+                reddit_client=reddit_client,
+                on_progress=on_progress,
+            )
 
     async def pull_all(self, session: Session) -> list[PullExecutionResult]:
         results: list[PullExecutionResult] = []
@@ -67,7 +95,13 @@ class IngestionService:
                 )
         return results
 
-    async def _pull_with_client(self, session: Session, subreddit: str, reddit_client: RedditClient) -> PullExecutionResult:
+    async def _pull_with_client(
+        self,
+        session: Session,
+        subreddit: str,
+        reddit_client: RedditClient,
+        on_progress: PullProgressCallback | None = None,
+    ) -> PullExecutionResult:
         pulled_at = utc_now()
         date_bucket = to_berlin_date(pulled_at)
         pull_run = PullRun(
@@ -89,14 +123,56 @@ class IngestionService:
         mentions_count = 0
         stance_rows_count = 0
         partial_errors: list[str] = []
+        total_submissions: int | None = None
+        processed_submissions = 0
+        self._emit_progress(
+            on_progress=on_progress,
+            subreddit=subreddit,
+            phase='initializing',
+            total_submissions=total_submissions,
+            processed_submissions=processed_submissions,
+            current_submission_id=None,
+            submissions=submissions_count,
+            comments=comments_count,
+            mentions=mentions_count,
+            stance_rows=stance_rows_count,
+            partial_errors=len(partial_errors),
+        )
 
         try:
             parsed_submissions = await self._fetch_listing_posts(
                 reddit_client=reddit_client,
                 subreddit=subreddit,
             )
+            total_submissions = len(parsed_submissions)
+            self._emit_progress(
+                on_progress=on_progress,
+                subreddit=subreddit,
+                phase='listing_complete',
+                total_submissions=total_submissions,
+                processed_submissions=processed_submissions,
+                current_submission_id=None,
+                submissions=submissions_count,
+                comments=comments_count,
+                mentions=mentions_count,
+                stance_rows=stance_rows_count,
+                partial_errors=len(partial_errors),
+            )
 
             for parsed_submission in parsed_submissions:
+                self._emit_progress(
+                    on_progress=on_progress,
+                    subreddit=subreddit,
+                    phase='processing_submission',
+                    total_submissions=total_submissions,
+                    processed_submissions=processed_submissions,
+                    current_submission_id=parsed_submission.id,
+                    submissions=submissions_count,
+                    comments=comments_count,
+                    mentions=mentions_count,
+                    stance_rows=stance_rows_count,
+                    partial_errors=len(partial_errors),
+                )
                 try:
                     submission = self._upsert_submission(session, parsed_submission, pull_run.id)
                     submissions_count += 1
@@ -157,8 +233,35 @@ class IngestionService:
                 except Exception as exc:
                     session.rollback()
                     partial_errors.append(f'{parsed_submission.id}: {exc}')
-                    continue
+                finally:
+                    processed_submissions += 1
+                    self._emit_progress(
+                        on_progress=on_progress,
+                        subreddit=subreddit,
+                        phase='processing_submission',
+                        total_submissions=total_submissions,
+                        processed_submissions=processed_submissions,
+                        current_submission_id=parsed_submission.id,
+                        submissions=submissions_count,
+                        comments=comments_count,
+                        mentions=mentions_count,
+                        stance_rows=stance_rows_count,
+                        partial_errors=len(partial_errors),
+                    )
 
+            self._emit_progress(
+                on_progress=on_progress,
+                subreddit=subreddit,
+                phase='aggregating',
+                total_submissions=total_submissions,
+                processed_submissions=processed_submissions,
+                current_submission_id=None,
+                submissions=submissions_count,
+                comments=comments_count,
+                mentions=mentions_count,
+                stance_rows=stance_rows_count,
+                partial_errors=len(partial_errors),
+            )
             self._recompute_daily_scores(session=session, date_bucket=date_bucket, subreddit=subreddit)
             warning = None
             if partial_errors:
@@ -168,6 +271,19 @@ class IngestionService:
             pull_run.error = warning
             session.add(pull_run)
             session.commit()
+            self._emit_progress(
+                on_progress=on_progress,
+                subreddit=subreddit,
+                phase='finished',
+                total_submissions=total_submissions,
+                processed_submissions=processed_submissions,
+                current_submission_id=None,
+                submissions=submissions_count,
+                comments=comments_count,
+                mentions=mentions_count,
+                stance_rows=stance_rows_count,
+                partial_errors=len(partial_errors),
+            )
 
             return PullExecutionResult(
                 pull_run_id=pull_run.id,
@@ -188,6 +304,19 @@ class IngestionService:
                 run.error = str(exc)[:4000]
                 session.add(run)
                 session.commit()
+            self._emit_progress(
+                on_progress=on_progress,
+                subreddit=subreddit,
+                phase='failed',
+                total_submissions=total_submissions,
+                processed_submissions=processed_submissions,
+                current_submission_id=None,
+                submissions=submissions_count,
+                comments=comments_count,
+                mentions=mentions_count,
+                stance_rows=stance_rows_count,
+                partial_errors=len(partial_errors),
+            )
             return PullExecutionResult(
                 pull_run_id=pull_run.id,
                 subreddit=subreddit,
@@ -562,6 +691,42 @@ class IngestionService:
 
         return submissions
 
+    def _emit_progress(
+        self,
+        *,
+        on_progress: PullProgressCallback | None,
+        subreddit: str,
+        phase: str,
+        total_submissions: int | None,
+        processed_submissions: int,
+        current_submission_id: str | None,
+        submissions: int,
+        comments: int,
+        mentions: int,
+        stance_rows: int,
+        partial_errors: int,
+    ) -> None:
+        if on_progress is None:
+            return
+        try:
+            on_progress(
+                PullProgressUpdate(
+                    subreddit=subreddit,
+                    phase=phase,
+                    total_submissions=total_submissions,
+                    processed_submissions=processed_submissions,
+                    current_submission_id=current_submission_id,
+                    submissions=submissions,
+                    comments=comments,
+                    mentions=mentions,
+                    stance_rows=stance_rows,
+                    partial_errors=partial_errors,
+                )
+            )
+        except Exception:
+            # Progress reporting must never break ingestion.
+            return
+
     def _is_external_url(self, url: str) -> bool:
         host = urlparse(url).netloc.lower()
         if not host:
@@ -583,8 +748,10 @@ class IngestionService:
         queue: list[PendingMore] = list(initial_pending_more)
         requested_ids: set[str] = set()
         api_calls = 0
+        max_batches = int(self._settings.reddit_morechildren_max_batches)
+        unlimited_batches = max_batches <= 0
 
-        while queue and api_calls < self._settings.reddit_morechildren_max_batches:
+        while queue and (unlimited_batches or api_calls < max_batches):
             pending = queue.pop(0)
             unresolved = [cid for cid in pending.children if cid not in comments_by_id and cid not in requested_ids]
             if not unresolved:
@@ -609,7 +776,7 @@ class IngestionService:
 
                 queue.extend(extra_pending)
                 api_calls += 1
-                if api_calls >= self._settings.reddit_morechildren_max_batches:
+                if not unlimited_batches and api_calls >= max_batches:
                     break
 
         return sorted(comments_by_id.values(), key=lambda c: (c.depth, c.created_utc))

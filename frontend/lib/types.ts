@@ -223,6 +223,62 @@ export type SubredditsResponse = {
   default_limit: number;
 };
 
+export type PullSummary = {
+  pull_run_id: number;
+  subreddit: string;
+  date_bucket_berlin: string;
+  status: string;
+  submissions: number;
+  comments: number;
+  mentions: number;
+  stance_rows: number;
+  error: string | null;
+};
+
+export type PullRunStatus = {
+  subreddit: string;
+  status: string;
+  pulled_at_utc: string;
+  date_bucket_berlin: string;
+  error: string | null;
+};
+
+export type PullStatusOverview = {
+  generated_at_utc: string;
+  overall_last_success_utc: string | null;
+  running_subreddits: string[];
+  failed_subreddits: string[];
+  subreddits_without_success: string[];
+  latest_by_subreddit: PullRunStatus[];
+  last_success_by_subreddit: PullRunStatus[];
+};
+
+export type PullJobStatus = {
+  job_id: string;
+  mode: string;
+  requested_subreddit: string | null;
+  status: string;
+  started_at_utc: string;
+  finished_at_utc: string | null;
+  total_steps: number;
+  completed_steps: number;
+  progress: number;
+  current_subreddit: string | null;
+  current_phase: string | null;
+  current_subreddit_progress: number;
+  current_total_submissions: number | null;
+  current_processed_submissions: number;
+  current_submission_id: string | null;
+  current_submissions: number;
+  current_comments: number;
+  current_mentions: number;
+  current_stance_rows: number;
+  current_partial_errors: number;
+  heartbeat_utc: string | null;
+  summaries: PullSummary[];
+  error: string | null;
+};
+
 export type TickerPoint = {
   date_bucket_berlin: string;
   score_unweighted: number;
