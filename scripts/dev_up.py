@@ -14,6 +14,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = REPO_ROOT / 'backend'
 FRONTEND_DIR = REPO_ROOT / 'frontend'
+VENV_DIR = REPO_ROOT / '.venv'
 
 
 def is_windows() -> bool:
@@ -22,8 +23,8 @@ def is_windows() -> bool:
 
 def backend_python_path() -> Path:
     if is_windows():
-        return BACKEND_DIR / '.venv' / 'Scripts' / 'python.exe'
-    return BACKEND_DIR / '.venv' / 'bin' / 'python'
+        return VENV_DIR / 'Scripts' / 'python.exe'
+    return VENV_DIR / 'bin' / 'python'
 
 
 def npm_command() -> str:
@@ -44,7 +45,7 @@ def can_connect(host: str, port: int) -> bool:
 def ensure_backend_ready() -> Path:
     py = backend_python_path()
     if not py.exists():
-        run_checked([sys.executable, '-m', 'venv', str(BACKEND_DIR / '.venv')], cwd=BACKEND_DIR)
+        run_checked([sys.executable, '-m', 'venv', str(VENV_DIR)], cwd=REPO_ROOT)
 
     try:
         run_checked([str(py), '-c', 'import fastapi,uvicorn,sqlalchemy,alembic'], cwd=BACKEND_DIR)
@@ -143,7 +144,7 @@ def main() -> int:
         else:
             py = backend_python_path()
             if not py.exists():
-                print('Backend venv missing. Run without --skip-setup once.')
+                print('Shared repo venv missing. Run without --skip-setup once.')
                 return 2
     except subprocess.CalledProcessError as exc:
         print(f'Setup failed (exit code {exc.returncode}).')

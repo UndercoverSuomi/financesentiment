@@ -130,15 +130,15 @@ Windows PowerShell shortcut:
 .\start-dev.ps1
 ```
 
-This boots backend + frontend together, including setup checks (venv/deps/migrations) on first run.
+This boots backend + frontend together, including setup checks (shared repo `.venv` / deps / migrations) on first run.
 
 ### 1) Backend
 
 ```bash
-cd backend
 python -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
+cd backend
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
@@ -362,8 +362,7 @@ Notes:
 Run:
 
 ```bash
-cd backend
-pytest
+.venv\Scripts\python -m pytest backend/tests
 ```
 
 Included tests:
