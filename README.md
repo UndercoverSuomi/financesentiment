@@ -142,12 +142,12 @@ Defaults:
 - posts per page: `20`
 - listing pages per pull: `1` (Top-20 Posts pro Subreddit/Pull)
 - thread depth: `32`
-- morechildren batch cap: `0` (`0` bedeutet ohne festen Batch-Cap, also maximale Kommentarabdeckung)
+- morechildren batch cap: `40` (fester Cap pro Submission fuer tiefe, aber kontrollierte Kommentarabdeckung)
 - official API mode: `REDDIT_USE_OFFICIAL_API=true`
 - oauth API host: `REDDIT_BASE_URL=https://oauth.reddit.com`
 - oauth token endpoint: `REDDIT_OAUTH_TOKEN_URL=https://www.reddit.com/api/v1/access_token`
 - oauth scope: `REDDIT_OAUTH_SCOPE=read`
-- required: `REDDIT_CLIENT_ID` (+ optional `REDDIT_CLIENT_SECRET` je nach App-Typ)
+- required: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT`
 - concurrency: `1` (stabiler gegen Rate-Limits)
 - max request rate: `90 RPM` (unterhalb des 100 RPM Free-Limits)
 - backoff base: `2.0`
@@ -158,8 +158,8 @@ Defaults:
 ### Official API setup (kostenloser Modus)
 
 1. Erstelle eine Reddit-App unter `reddit.com/prefs/apps`.
-2. Trage in `.env` mindestens `REDDIT_CLIENT_ID` ein.
-3. Falls deine App einen Secret hat, setze auch `REDDIT_CLIENT_SECRET`.
+2. Trage in `.env` `REDDIT_CLIENT_ID` ein.
+3. Trage in `.env` `REDDIT_CLIENT_SECRET` ein.
 4. Nutze einen klaren `REDDIT_USER_AGENT` mit Kontakt (Reddit Policy).
 5. Lass `REDDIT_MAX_REQUESTS_PER_MINUTE=90`, um unter dem 100 RPM Free-Limit zu bleiben.
 
@@ -173,7 +173,7 @@ Die App ist jetzt auf schnellere Pulls pro Subreddit eingestellt, bei gleichzeit
 - `PULL_T_PARAM=day`
 - `PULL_LIMIT=20`
 - `PULL_MAX_PAGES=1`
-- `REDDIT_MORECHILDREN_MAX_BATCHES=0` (`0` = unbegrenzt viele MoreChildren-Batches pro Submission)
+- `REDDIT_MORECHILDREN_MAX_BATCHES=40` (fester Cap pro Submission)
 - `REDDIT_MAX_CONCURRENCY=1`, `REDDIT_BACKOFF_BASE=2.0`, `REDDIT_MIN_REQUEST_INTERVAL_SECONDS=0.45`
 - `PULL_SUBREDDIT_PAUSE_SECONDS=2.0` (weniger Burst-Spitzen bei `pull all`)
 
@@ -181,7 +181,7 @@ Tradeoff:
 
 - deutlich schneller als "1000 Posts pro Subreddit"
 - dafuer nur Top-20 Posts der letzten 24h
-- Kommentarabdeckung pro gewaehltem Post ist maximal ausgelegt (ohne festen Batch-Cap), bleibt aber von Reddit-API-Limits/Timeouts abhaengig
+- Kommentarabdeckung pro gewaehltem Post ist tief ausgelegt (bis 40 MoreChildren-Batches), bleibt aber von Reddit-API-Limits/Timeouts abhaengig
 
 ## Ingestion and reproducibility
 
@@ -284,6 +284,29 @@ Set `USE_FINBERT=true`.
 
 - if FinBERT is unavailable or fails to load, app falls back to deterministic CPU-safe model
 - to enable FinBERT inference, install `transformers` (+ runtime dependencies) in backend env
+
+### Gemini LLM fallback (optional)
+
+Set `USE_LLM_MODEL=true` and configure:
+
+- `GEMINI_API_KEY`
+- `GEMINI_MODEL` (default: `gemini-3-flash-preview`)
+- `GEMINI_API_BASE_URL` (default: `https://generativelanguage.googleapis.com/v1beta`)
+
+Control cost/latency with:
+
+- `LLM_UNCLEAR_ONLY=true` (default): call LLM only for low-confidence/UNCLEAR cases
+- `LLM_LOW_CONFIDENCE_THRESHOLD=0.65`
+- `LLM_ENABLE_SARCASM_TRIGGER=true` (forces LLM on sarcasm cues like `/s`, `yeah right`)
+- `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`, `LLM_MAX_OUTPUT_TOKENS`
+- `LLM_INPUT_PRICE_PER_MILLION_TOKENS` / `LLM_OUTPUT_PRICE_PER_MILLION_TOKENS` (for runtime cost estimation in logs)
+
+Behavior:
+
+- base model runs first (deterministic or FinBERT)
+- LLM is used as fallback on uncertain/sarcastic cases
+- if LLM request fails, service falls back to base model result
+- pull logs include per-subreddit LLM metrics (`llm_calls`, tokens, estimated `llm_cost_usd`)
 
 ### Proxy rotation (optional)
 

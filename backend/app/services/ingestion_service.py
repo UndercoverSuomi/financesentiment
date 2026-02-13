@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import logging
+import time
 from typing import Callable
 from urllib.parse import urlparse
 
@@ -56,6 +58,7 @@ class PullProgressUpdate:
 
 
 PullProgressCallback = Callable[[PullProgressUpdate], None]
+LOGGER = logging.getLogger(__name__)
 
 
 class IngestionService:
@@ -102,6 +105,8 @@ class IngestionService:
         reddit_client: RedditClient,
         on_progress: PullProgressCallback | None = None,
     ) -> PullExecutionResult:
+        self._stance_service.reset_runtime_metrics()
+        started_mono = time.perf_counter()
         pulled_at = utc_now()
         date_bucket = to_berlin_date(pulled_at)
         pull_run = PullRun(
@@ -284,6 +289,17 @@ class IngestionService:
                 stance_rows=stance_rows_count,
                 partial_errors=len(partial_errors),
             )
+            self._log_pull_summary(
+                subreddit=subreddit,
+                status='success',
+                duration_seconds=(time.perf_counter() - started_mono),
+                submissions=submissions_count,
+                comments=comments_count,
+                mentions=mentions_count,
+                stance_rows=stance_rows_count,
+                partial_errors=len(partial_errors),
+                reddit_client=reddit_client,
+            )
 
             return PullExecutionResult(
                 pull_run_id=pull_run.id,
@@ -316,6 +332,17 @@ class IngestionService:
                 mentions=mentions_count,
                 stance_rows=stance_rows_count,
                 partial_errors=len(partial_errors),
+            )
+            self._log_pull_summary(
+                subreddit=subreddit,
+                status='failed',
+                duration_seconds=(time.perf_counter() - started_mono),
+                submissions=submissions_count,
+                comments=comments_count,
+                mentions=mentions_count,
+                stance_rows=stance_rows_count,
+                partial_errors=len(partial_errors),
+                reddit_client=reddit_client,
             )
             return PullExecutionResult(
                 pull_run_id=pull_run.id,
@@ -726,6 +753,64 @@ class IngestionService:
         except Exception:
             # Progress reporting must never break ingestion.
             return
+
+    def _log_pull_summary(
+        self,
+        *,
+        subreddit: str,
+        status: str,
+        duration_seconds: float,
+        submissions: int,
+        comments: int,
+        mentions: int,
+        stance_rows: int,
+        partial_errors: int,
+        reddit_client: RedditClient,
+    ) -> None:
+        stance_metrics = self._stance_service.get_runtime_metrics()
+        limits = reddit_client.get_rate_limit_snapshot()
+        if limits is None:
+            LOGGER.info(
+                'pull summary subreddit=%s status=%s duration_s=%.2f submissions=%d comments=%d mentions=%d stance_rows=%d partial_errors=%d llm_calls=%d llm_failures=%d llm_prompt_tokens=%d llm_output_tokens=%d llm_total_tokens=%d llm_cost_usd=%.6f llm_calls_without_usage=%d',
+                subreddit,
+                status,
+                duration_seconds,
+                submissions,
+                comments,
+                mentions,
+                stance_rows,
+                partial_errors,
+                stance_metrics.llm_calls,
+                stance_metrics.llm_failures,
+                stance_metrics.llm_prompt_tokens,
+                stance_metrics.llm_output_tokens,
+                stance_metrics.llm_total_tokens,
+                stance_metrics.llm_estimated_cost_usd,
+                stance_metrics.llm_calls_without_usage,
+            )
+            return
+
+        LOGGER.info(
+            'pull summary subreddit=%s status=%s duration_s=%.2f submissions=%d comments=%d mentions=%d stance_rows=%d partial_errors=%d rate_remaining=%.2f rate_used=%.2f rate_remaining_pct=%s llm_calls=%d llm_failures=%d llm_prompt_tokens=%d llm_output_tokens=%d llm_total_tokens=%d llm_cost_usd=%.6f llm_calls_without_usage=%d',
+            subreddit,
+            status,
+            duration_seconds,
+            submissions,
+            comments,
+            mentions,
+            stance_rows,
+            partial_errors,
+            float(limits.get('remaining') or 0.0),
+            float(limits.get('used') or 0.0),
+            ('n/a' if limits.get('remaining_percent') is None else f"{float(limits['remaining_percent']):.2f}%"),
+            stance_metrics.llm_calls,
+            stance_metrics.llm_failures,
+            stance_metrics.llm_prompt_tokens,
+            stance_metrics.llm_output_tokens,
+            stance_metrics.llm_total_tokens,
+            stance_metrics.llm_estimated_cost_usd,
+            stance_metrics.llm_calls_without_usage,
+        )
 
     def _is_external_url(self, url: str) -> bool:
         host = urlparse(url).netloc.lower()

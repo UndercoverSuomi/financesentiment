@@ -20,10 +20,13 @@ class Settings(BaseSettings):
     reddit_use_official_api: bool = True
     reddit_base_url: str = 'https://oauth.reddit.com'
     reddit_oauth_token_url: str = 'https://www.reddit.com/api/v1/access_token'
-    reddit_client_id: str = ''
-    reddit_client_secret: str = ''
+    reddit_client_id: str = Field(default='', validation_alias='REDDIT_CLIENT_ID')
+    reddit_client_secret: str = Field(default='', validation_alias='REDDIT_CLIENT_SECRET')
     reddit_oauth_scope: str = 'read'
-    reddit_user_agent: str = 'financesentiment/0.1 (contact: email_or_repo)'
+    reddit_user_agent: str = Field(
+        default='financesentiment/0.1 (contact: email_or_repo)',
+        validation_alias='REDDIT_USER_AGENT',
+    )
     reddit_timeout_connect: float = 3.0
     reddit_timeout_read: float = 20.0
     reddit_max_concurrency: int = 1
@@ -38,7 +41,7 @@ class Settings(BaseSettings):
     reddit_thread_limit: int = 500
     reddit_thread_depth: int = 32
     reddit_morechildren_chunk_size: int = 100
-    reddit_morechildren_max_batches: int = 0
+    reddit_morechildren_max_batches: int = 40
 
     subreddits_csv: str = 'wallstreetbets,stocks,investing,finance'
     pull_sort: str = 'top'
@@ -54,6 +57,19 @@ class Settings(BaseSettings):
     image_max_size_bytes: int = 8_000_000
 
     use_finbert: bool = False
+    use_llm_model: bool = False
+    gemini_api_key: str = Field(default='', validation_alias='GEMINI_API_KEY')
+    gemini_model: str = 'gemini-3-flash-preview'
+    gemini_api_base_url: str = 'https://generativelanguage.googleapis.com/v1beta'
+    llm_timeout_seconds: float = 12.0
+    llm_max_retries: int = 2
+    llm_temperature: float = 0.0
+    llm_max_output_tokens: int = 120
+    llm_unclear_only: bool = True
+    llm_low_confidence_threshold: float = 0.65
+    llm_enable_sarcasm_trigger: bool = True
+    llm_input_price_per_million_tokens: float = 0.15
+    llm_output_price_per_million_tokens: float = 0.60
     unclear_threshold: float = 0.55
     unclear_short_text_len: int = 20
     inherit_parent_tickers_for_comments: bool = False
