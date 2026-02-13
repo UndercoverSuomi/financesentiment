@@ -1,4 +1,9 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const BROWSER_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const SERVER_API_BASE = process.env.API_BASE_URL_SERVER || BROWSER_API_BASE;
+
+function resolvedApiBase(): string {
+  return typeof window === 'undefined' ? SERVER_API_BASE : BROWSER_API_BASE;
+}
 
 export class ApiRequestError extends Error {
   status: number | null;
@@ -15,15 +20,16 @@ export class ApiRequestError extends Error {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
+  const apiBase = resolvedApiBase();
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${apiBase}${path}`, {
       method: 'GET',
       cache: 'no-store',
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'network error';
-    throw new ApiRequestError(`Cannot reach backend API (${API_BASE})`, null, path, message);
+    throw new ApiRequestError(`Cannot reach backend API (${apiBase})`, null, path, message);
   }
 
   if (!response.ok) {
@@ -50,9 +56,10 @@ export async function apiGet<T>(path: string): Promise<T> {
 }
 
 export function readableApiError(error: unknown): string {
+  const apiBase = resolvedApiBase();
   if (error instanceof ApiRequestError) {
     if (error.status === null) {
-      return `Backend nicht erreichbar. Pruefe, ob die API unter ${API_BASE} laeuft.`;
+      return `Backend nicht erreichbar. Pruefe, ob die API unter ${apiBase} laeuft.`;
     }
     if (error.details) {
       return `${error.message}: ${error.details}`;

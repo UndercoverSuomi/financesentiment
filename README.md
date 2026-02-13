@@ -6,7 +6,7 @@ This project ingests Reddit JSON via the official OAuth API server-side, parses 
 
 ## Architecture
 
-- `backend/`: FastAPI + SQLAlchemy + SQLite + Alembic
+- `backend/`: FastAPI + SQLAlchemy + Alembic (`SQLite` for local dev, `PostgreSQL` in Docker Compose)
 - `frontend/`: Next.js App Router + Tailwind
 - `scripts/pull_once.py`: CLI pull trigger
 - `data/images/`: optional image downloads
@@ -83,7 +83,40 @@ Daily aggregation stores:
 
 ## Quickstart
 
-### 0) One-command dev start (recommended)
+### Docker (backend + frontend + postgres)
+
+1. Copy `.env.example` to `.env` (first time only) and set your secrets.
+2. Start everything from repo root:
+
+```bash
+docker compose up --build
+```
+
+Services:
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- PostgreSQL: `localhost:5432`
+
+Stop:
+
+```bash
+docker compose down
+```
+
+Reset DB volume:
+
+```bash
+docker compose down -v
+```
+
+Notes:
+
+- Backend/Frontend receive environment variables via `.env` (`env_file` in Compose).
+- Compose sets backend `DATABASE_URL` from `DATABASE_URL_DOCKER` (defaults to Postgres service `db`).
+- Frontend uses `NEXT_PUBLIC_API_BASE_URL` for browser calls and `API_BASE_URL_SERVER` for server-side fetches.
+
+### Local dev (without Docker)
 
 From repo root:
 
@@ -154,6 +187,8 @@ Defaults:
 - min request interval: `0.70s`
 - pause between subreddits in pull-all: `2.0s`
 - proxy rotation: disabled by default (`REDDIT_PROXY_URLS_CSV` empty)
+- docker DB URL override: `DATABASE_URL_DOCKER=postgresql+psycopg://financesentiment:financesentiment@db:5432/financesentiment`
+- frontend server-side API base in Docker: `API_BASE_URL_SERVER=http://backend:8000`
 
 ### Official API setup (kostenloser Modus)
 
