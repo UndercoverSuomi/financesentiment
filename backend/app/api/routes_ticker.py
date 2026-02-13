@@ -21,8 +21,11 @@ from app.schemas.api import (
     SubmissionOut,
     ThreadResponse,
     TickerPoint,
+    TickerPricePoint,
+    TickerPriceResponse,
     TickerSeriesResponse,
 )
+from app.services.ticker_price_service import TickerPriceError, fetch_ticker_close_prices
 from app.utils.timezone import to_berlin_date, utc_now
 
 router = APIRouter()
@@ -76,6 +79,45 @@ def get_ticker_series(
         series=series,
         bullish_examples=bullish_examples,
         bearish_examples=bearish_examples,
+    )
+
+
+@router.get('/ticker/{ticker}/price', response_model=TickerPriceResponse)
+def get_ticker_price_series(
+    ticker: str,
+    days: int = Query(default=30, ge=1, le=365),
+    interval: str = Query(default='1d'),
+) -> TickerPriceResponse:
+    ticker = ticker.upper()
+    end_date = to_berlin_date(utc_now())
+    start_date = end_date - timedelta(days=days - 1)
+    normalized_interval = interval.strip().lower()
+
+    try:
+        rows = fetch_ticker_close_prices(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date,
+            interval=normalized_interval,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except TickerPriceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return TickerPriceResponse(
+        ticker=ticker,
+        days=days,
+        date_from=start_date,
+        date_to=end_date,
+        interval=normalized_interval,
+        series=[
+            TickerPricePoint(
+                date_bucket_berlin=row.date_bucket_berlin,
+                close_price=row.close_price,
+            )
+            for row in rows
+        ],
     )
 
 

@@ -18,6 +18,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        # Keep Alembic version storage compatible with long revision IDs.
+        op.execute(sa.text('ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)'))
+
     with op.batch_alter_table('daily_scores') as batch_op:
         batch_op.add_column(sa.Column('valid_count', sa.Integer(), nullable=False, server_default='0'))
         batch_op.add_column(sa.Column('score_sum_unweighted', sa.Float(), nullable=False, server_default='0'))

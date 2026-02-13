@@ -6,6 +6,7 @@ from sqlalchemy import delete
 from app.main import app
 from app.db.session import SessionLocal
 from app.models.daily_score import DailyScore
+from app.services.ticker_price_service import PricePoint
 from app.utils.timezone import to_berlin_date, utc_now
 
 
@@ -73,3 +74,33 @@ def test_ticker_series_rejects_unknown_subreddit() -> None:
     client = TestClient(app)
     response = client.get('/api/ticker/AAPL?days=30&subreddit=unknown_subreddit')
     assert response.status_code == 400
+
+
+def test_ticker_price_endpoint_returns_series(monkeypatch) -> None:
+    today = to_berlin_date(utc_now())
+
+    def _fake_fetch(*, ticker: str, start_date, end_date, interval: str) -> list[PricePoint]:
+        assert ticker == 'AAPL'
+        assert interval == '1d'
+        assert start_date <= end_date
+        return [
+            PricePoint(date_bucket_berlin=today, close_price=198.25),
+        ]
+
+    monkeypatch.setattr('app.api.routes_ticker.fetch_ticker_close_prices', _fake_fetch)
+
+    client = TestClient(app)
+    response = client.get('/api/ticker/AAPL/price?days=1')
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload['ticker'] == 'AAPL'
+    assert payload['days'] == 1
+    assert payload['series'] == [{'date_bucket_berlin': today.isoformat(), 'close_price': 198.25}]
+
+
+def test_ticker_price_endpoint_rejects_unsupported_interval() -> None:
+    client = TestClient(app)
+    response = client.get('/api/ticker/AAPL/price?days=30&interval=2h')
+    assert response.status_code == 400
+    assert 'interval must be one of' in response.json()['detail']

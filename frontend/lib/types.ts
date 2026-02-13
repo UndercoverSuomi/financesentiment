@@ -306,6 +306,20 @@ export type TickerSeriesResponse = {
   bearish_examples: CommentExample[];
 };
 
+export type TickerPricePoint = {
+  date_bucket_berlin: string;
+  close_price: number;
+};
+
+export type TickerPriceResponse = {
+  ticker: string;
+  days: number;
+  date_from: string;
+  date_to: string;
+  interval: string;
+  series: TickerPricePoint[];
+};
+
 export type Mention = {
   ticker: string;
   confidence: number;

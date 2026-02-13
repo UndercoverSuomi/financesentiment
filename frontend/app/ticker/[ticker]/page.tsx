@@ -6,7 +6,7 @@ import ScoreChart from '@/components/ScoreChart';
 import VolumeChart from '@/components/VolumeChart';
 import { apiGet, readableApiError } from '@/lib/api';
 import { formatPct, formatScore } from '@/lib/format';
-import type { TickerSeriesResponse } from '@/lib/types';
+import type { TickerPriceResponse, TickerSeriesResponse } from '@/lib/types';
 
 type SearchParams = {
   days?: string;
@@ -27,14 +27,18 @@ export default async function TickerPage({
   const days = Number.isFinite(parsedDays) && parsedDays >= 1 && parsedDays <= 365 ? parsedDays : 30;
   const subreddit = qp.subreddit || '';
 
-  let data: TickerSeriesResponse;
-  try {
-    data = await apiGet<TickerSeriesResponse>(
-      `/api/ticker/${encodeURIComponent(ticker.toUpperCase())}?days=${days}${
-        subreddit ? `&subreddit=${encodeURIComponent(subreddit)}` : ''
-      }`,
-    );
-  } catch (error) {
+  const tickerCode = ticker.toUpperCase();
+  const seriesPath = `/api/ticker/${encodeURIComponent(tickerCode)}?days=${days}${
+    subreddit ? `&subreddit=${encodeURIComponent(subreddit)}` : ''
+  }`;
+  const pricePath = `/api/ticker/${encodeURIComponent(tickerCode)}/price?days=${days}&interval=1d`;
+
+  const [seriesResult, priceResult] = await Promise.allSettled([
+    apiGet<TickerSeriesResponse>(seriesPath),
+    apiGet<TickerPriceResponse>(pricePath),
+  ]);
+
+  if (seriesResult.status === 'rejected') {
     return (
       <main className='space-y-6 py-4'>
         <section className='line-section'>
@@ -42,10 +46,15 @@ export default async function TickerPage({
             back to dashboard
           </Link>
         </section>
-        <ErrorState title='Ticker Data Unavailable' message={readableApiError(error)} />
+        <ErrorState title='Ticker Data Unavailable' message={readableApiError(seriesResult.reason)} />
       </main>
     );
   }
+
+  const data = seriesResult.value;
+  const priceSeries = priceResult.status === 'fulfilled' ? priceResult.value.series : [];
+  const priceFetchError = priceResult.status === 'rejected' ? readableApiError(priceResult.reason) : null;
+
   const dayOptions = [7, 14, 30, 90];
   const latestPoint = data.series.at(-1);
   const maxMentions = data.series.length ? Math.max(...data.series.map((p) => p.mention_count)) : 0;
@@ -111,7 +120,7 @@ export default async function TickerPage({
       </section>
 
       <div className='grid gap-4 lg:grid-cols-2'>
-        <ScoreChart points={data.series} />
+        <ScoreChart points={data.series} pricePoints={priceSeries} priceFetchError={priceFetchError} />
         <VolumeChart points={data.series} />
       </div>
 

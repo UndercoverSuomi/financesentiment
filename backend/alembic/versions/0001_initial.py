@@ -136,6 +136,11 @@ def upgrade() -> None:
     )
     op.create_index('ix_daily_scores_date_subreddit_ticker', 'daily_scores', ['date_bucket_berlin', 'subreddit', 'ticker'])
 
+    bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        # Alembic defaults this column to VARCHAR(32), but our revision IDs are longer.
+        op.execute(sa.text('ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)'))
+
 
 def downgrade() -> None:
     op.drop_index('ix_daily_scores_date_subreddit_ticker', table_name='daily_scores')

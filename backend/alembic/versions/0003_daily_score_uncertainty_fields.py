@@ -18,6 +18,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        op.execute(sa.text('ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)'))
+
     with op.batch_alter_table('daily_scores') as batch_op:
         batch_op.add_column(sa.Column('score_stddev_unweighted', sa.Float(), nullable=False, server_default='0'))
         batch_op.add_column(sa.Column('ci95_low_unweighted', sa.Float(), nullable=False, server_default='0'))

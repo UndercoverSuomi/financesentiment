@@ -296,6 +296,20 @@ class TickerPoint(BaseModel):
     unclear_rate: float
 
 
+class TickerPricePoint(BaseModel):
+    date_bucket_berlin: date
+    close_price: float
+
+
+class TickerPriceResponse(BaseModel):
+    ticker: str
+    days: int
+    date_from: date
+    date_to: date
+    interval: str
+    series: list[TickerPricePoint]
+
+
 class CommentExample(BaseModel):
     id: str
     submission_id: str
